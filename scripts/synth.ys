@@ -1,14 +1,18 @@
+# Read SystemVerilog RTL files
 read_verilog -sv rtl/pe.v
 read_verilog -sv rtl/systolic_array.v
-hierarchy -check -top systolic_array
-chparam -set N $::env(ARRAY_SIZE) -set WIDTH $::env(DATA_WIDTH) systolic_array
+
+# Elaborate top module and set parameters safely
+hierarchy -check -top systolic_array -chparam N $::env(ARRAY_SIZE) -chparam WIDTH $::env(DATA_WIDTH)
+
+# Generic synthesis pass
 synth -top systolic_array
 
-# Auto-detect Liberty file from Conda environment
+# Map flip-flops and gate logic using standard cell library path in runner
 dfflibmap -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
 abc -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
-clean
 
-# Write netlist
+# Clean unused nodes and write structural netlist
+clean
 write_verilog -noattr systolic_project/synth/systolic_netlist.v
-stat -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+stat

@@ -1,10 +1,11 @@
-name: Systolic Array Congestion Sweep
+name: Systolic Array Congestion Sweep (Diagnostic Build)
 on:
   workflow_dispatch:
 
 jobs:
   run-sweep:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -15,23 +16,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check disk space (before install)
+        run: df -h .
+
       - name: Cache Conda Toolchain
         id: cache-conda
         uses: actions/cache@v4
         with:
           path: ./conda-env
-          key: ${{ runner.os }}-condapdk-v1
+          key: ${{ runner.os }}-condapdk-v2-alwayscopy
 
-      - name: Install toolchain
+      - name: Install toolchain (always-copy, verbose, timed)
         if: steps.cache-conda.outputs.cache-hit != 'true'
+        timeout-minutes: 40
         run: |
+          echo "=== Downloading micromamba ==="
           curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
-          ./bin/micromamba create --yes --prefix ./conda-env \
+
+          echo "=== Installing toolchain (always-copy avoids hardlink stalls) ==="
+          ./bin/micromamba create --yes --always-copy --prefix ./conda-env \
             --channel litex-hub --channel main \
-            open_pdks.sky130a openroad yosys
+            open_pdks.sky130a openroad yosys \
+            -vv 2>&1 | tee install.log
+          echo "=== Install step finished ==="
+
+      - name: Upload install log (always, even on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-log
+          path: install.log
+          if-no-files-found: ignore
 
       - name: Add toolchain to PATH
         run: echo "$(pwd)/conda-env/bin" >> $GITHUB_PATH
+
+      - name: Verify toolchain is actually usable
+        run: |
+          echo "=== which yosys ==="
+          which yosys || (echo "FAIL: yosys not found on PATH" && exit 1)
+          yosys --version
+          echo "=== which openroad ==="
+          which openroad || (echo "FAIL: openroad not found on PATH" && exit 1)
+          openroad -version
+          echo "=== PDK check ==="
+          ls -la ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/ | head -5 || \
+            (echo "FAIL: sky130 liberty files not found where expected" && exit 1)
 
       - name: Set run environment
         run: |
@@ -42,25 +72,71 @@ jobs:
           echo "RUN_TAG=sys${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.utilization }}_clk${{ matrix.clk_period }}" >> $GITHUB_ENV
 
       - name: Synthesize
+        timeout-minutes: 10
         run: |
           mkdir -p systolic_project/synth systolic_project/runs
           cp scripts/synth.ys scripts/synth_run.ys
           sed -i "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" scripts/synth_run.ys
           sed -i "s/__DATA_WIDTH__/${DATA_WIDTH}/g" scripts/synth_run.ys
-          yosys -s scripts/synth_run.ys
+          echo "=== Resolved synth_run.ys ==="
+          cat scripts/synth_run.ys
+          echo "=== Running Yosys ==="
+          yosys -s scripts/synth_run.ys 2>&1 | tee systolic_project/synth/synth_log.txt
+          echo "=== Checking netlist was actually produced ==="
+          test -f systolic_project/synth/systolic_netlist.v || \
+            (echo "FAIL: netlist not produced" && exit 1)
+          wc -l systolic_project/synth/systolic_netlist.v
+
+      - name: Upload synthesis outputs (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synth-outputs
+          path: |
+            systolic_project/synth/
+            scripts/synth_run.ys
+          if-no-files-found: warn
 
       - name: Run OpenROAD flow
+        timeout-minutes: 30
         run: |
+          echo "=== Running flow.tcl ==="
           openroad -exit scripts/flow.tcl 2>&1 | tee systolic_project/runs/${RUN_TAG}_log.txt
+          echo "=== Last 30 lines of the flow log ==="
+          tail -30 systolic_project/runs/${RUN_TAG}_log.txt
+          echo "=== Checking final.odb was actually produced ==="
+          test -f systolic_project/runs/${RUN_TAG}/final.odb || \
+            (echo "FAIL: final.odb not found -- flow did not complete. See stage markers above." && exit 1)
+
+      - name: Upload OpenROAD run outputs (always, even on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openroad-run-${{ env.RUN_TAG }}
+          path: systolic_project/runs/
+          if-no-files-found: warn
 
       - name: Extract features
+        if: success()
         run: |
           openroad -python scripts/extract_features.py \
             systolic_project/runs/$RUN_TAG $RUN_TAG $UTIL $CLK_PERIOD $ARRAY_SIZE $DATA_WIDTH \
             > systolic_project/runs/${RUN_TAG}_features.json
+          echo "=== Extracted features ==="
+          cat systolic_project/runs/${RUN_TAG}_features.json
 
-      - name: Upload results
+      - name: Upload final results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: result-${{ env.RUN_TAG }}
           path: systolic_project/runs/
+          if-no-files-found: warn
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Run Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Netlist produced: $(test -f systolic_project/synth/systolic_netlist.v && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
+          echo "- final.odb produced: $(test -f systolic_project/runs/${RUN_TAG}/final.odb && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
+          echo "- Features JSON produced: $(test -f systolic_project/runs/${RUN_TAG}_features.json && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY

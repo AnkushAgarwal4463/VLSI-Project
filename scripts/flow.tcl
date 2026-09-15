@@ -14,26 +14,29 @@ read_lef $cell_lef
 read_liberty $pdk_lib
 read_verilog systolic_project/synth/systolic_netlist.v
 link_design systolic_array
-
 puts ">>> STAGE: design linked OK"
+
 create_clock -name clk -period $clk_period [get_ports clk]
 
 puts ">>> STAGE: floorplanning"
 initialize_floorplan -utilization $util -aspect_ratio 1.0 -core_space 2.0 -site unithd
+puts ">>> STAGE: floorplan OK"
 
 puts ">>> STAGE: pin placement"
 place_pins -random -hor_layers met3 -ver_layers met2
+puts ">>> STAGE: pin placement OK"
 
 puts ">>> STAGE: global placement"
 global_placement -density [expr {$util / 100.0 + 0.1}]
-
 puts ">>> STAGE: detailed placement"
 detailed_placement
 check_placement
+puts ">>> STAGE: placement OK"
 
 puts ">>> STAGE: global routing"
 global_route -congestion_report_file $out_dir/congestion.rpt \
              -guide_file $out_dir/route.guide
+puts ">>> STAGE: global routing OK"
 
 estimate_parasitics -placement
 puts "=== TIMING (post-placement, pre-route) ==="
@@ -44,6 +47,7 @@ puts ">>> STAGE: detailed routing"
 detailed_route -guide $out_dir/route.guide \
                -output_drc $out_dir/drc.rpt \
                -output_maze $out_dir/maze.log
+puts ">>> STAGE: detailed routing OK"
 
 estimate_parasitics -global_routing
 puts "=== TIMING (post-route) ==="

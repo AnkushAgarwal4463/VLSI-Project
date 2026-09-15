@@ -44,7 +44,10 @@ jobs:
       - name: Synthesize
         run: |
           mkdir -p systolic_project/synth systolic_project/runs
-          yosys -c scripts/synth.ys
+          cp scripts/synth.ys scripts/synth_run.ys
+          sed -i "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" scripts/synth_run.ys
+          sed -i "s/__DATA_WIDTH__/${DATA_WIDTH}/g" scripts/synth_run.ys
+          yosys -s scripts/synth_run.ys
 
       - name: Run OpenROAD flow
         run: |

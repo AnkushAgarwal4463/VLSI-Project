@@ -1,22 +1,10 @@
-# Read SystemVerilog RTL files
 read_verilog -sv rtl/pe.v
 read_verilog -sv rtl/systolic_array.v
-
-# Evaluate environment variables via Tcl
-set array_size $::env(ARRAY_SIZE)
-set data_width $::env(DATA_WIDTH)
-
-# Elaborate design hierarchy with parameterized array size and bit width
-hierarchy -check -top systolic_array -chparam N $array_size -chparam WIDTH $data_width
-
-# Perform generic synthesis
+hierarchy -check -top systolic_array
+chparam -set N __ARRAY_SIZE__ -set WIDTH __DATA_WIDTH__ systolic_array
 synth -top systolic_array
-
-# Map standard cells and flip-flops to Sky130 HD library
 dfflibmap -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
 abc -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
-
-# Clean and output gate-level structural netlist
 clean
 write_verilog -noattr systolic_project/synth/systolic_netlist.v
-stat
+stat -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib

@@ -15,13 +15,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache Conda Toolchain
+        id: cache-conda
+        uses: actions/cache@v4
+        with:
+          path: ./conda-env
+          key: ${{ runner.os }}-condapdk-v1
+
       - name: Install toolchain
+        if: steps.cache-conda.outputs.cache-hit != 'true'
         run: |
           curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
           ./bin/micromamba create --yes --prefix ./conda-env \
             --channel litex-hub --channel main \
             open_pdks.sky130a openroad yosys
-          echo "$(pwd)/conda-env/bin" >> $GITHUB_PATH
+
+      - name: Add toolchain to PATH
+        run: echo "$(pwd)/conda-env/bin" >> $GITHUB_PATH
 
       - name: Set run environment
         run: |
@@ -34,7 +44,7 @@ jobs:
       - name: Synthesize
         run: |
           mkdir -p systolic_project/synth systolic_project/runs
-          yosys -s scripts/synth.ys
+          yosys -c scripts/synth.ys
 
       - name: Run OpenROAD flow
         run: |

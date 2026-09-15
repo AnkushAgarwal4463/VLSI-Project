@@ -1,0 +1,53 @@
+name: Systolic Array Congestion Sweep
+on:
+  workflow_dispatch:
+
+jobs:
+  run-sweep:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        array_size: [4]
+        data_width: [8]
+        utilization: [70]
+        clk_period: [5.0]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+          ./bin/micromamba create --yes --prefix ./conda-env \
+            --channel litex-hub --channel main \
+            open_pdks.sky130a openroad yosys
+          echo "$(pwd)/conda-env/bin" >> $GITHUB_PATH
+
+      - name: Set run environment
+        run: |
+          echo "ARRAY_SIZE=${{ matrix.array_size }}" >> $GITHUB_ENV
+          echo "DATA_WIDTH=${{ matrix.data_width }}" >> $GITHUB_ENV
+          echo "UTIL=${{ matrix.utilization }}" >> $GITHUB_ENV
+          echo "CLK_PERIOD=${{ matrix.clk_period }}" >> $GITHUB_ENV
+          echo "RUN_TAG=sys${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.utilization }}_clk${{ matrix.clk_period }}" >> $GITHUB_ENV
+
+      - name: Synthesize
+        run: |
+          mkdir -p systolic_project/synth systolic_project/runs
+          yosys -s scripts/synth.ys
+
+      - name: Run OpenROAD flow
+        run: |
+          openroad -exit scripts/flow.tcl 2>&1 | tee systolic_project/runs/${RUN_TAG}_log.txt
+
+      - name: Extract features
+        run: |
+          openroad -python scripts/extract_features.py \
+            systolic_project/runs/$RUN_TAG $RUN_TAG $UTIL $CLK_PERIOD $ARRAY_SIZE $DATA_WIDTH \
+            > systolic_project/runs/${RUN_TAG}_features.json
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: result-${{ env.RUN_TAG }}
+          path: systolic_project/runs/

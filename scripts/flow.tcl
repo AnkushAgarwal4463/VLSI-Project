@@ -45,7 +45,7 @@ report_worst_slack -max
 report_tns
 
 puts ">>> STAGE: detailed routing"
-detailed_route -drc_report $out_dir/drc.rpt
+detailed_route
 puts ">>> STAGE: detailed routing OK"
 
 estimate_parasitics -global_routing

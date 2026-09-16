@@ -1,7 +1,6 @@
 read_verilog -sv rtl/pe.v
 read_verilog -sv rtl/systolic_array.v
-chparam -set N __ARRAY_SIZE__ -set WIDTH __DATA_WIDTH__ systolic_array
-hierarchy -check -top systolic_array
+hierarchy -check -top systolic_array -chparam N __ARRAY_SIZE__ -chparam WIDTH __DATA_WIDTH__
 synth -top systolic_array
 dfflibmap -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
 abc -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib

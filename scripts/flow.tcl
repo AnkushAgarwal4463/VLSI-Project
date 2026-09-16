@@ -45,9 +45,7 @@ report_worst_slack -max
 report_tns
 
 puts ">>> STAGE: detailed routing"
-detailed_route -guide $out_dir/route.guide \
-               -output_drc $out_dir/drc.rpt \
-               -output_maze $out_dir/maze.log
+detailed_route -drc_report $out_dir/drc.rpt
 puts ">>> STAGE: detailed routing OK"
 
 estimate_parasitics -global_routing

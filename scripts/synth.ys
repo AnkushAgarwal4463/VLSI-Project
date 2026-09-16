@@ -2,10 +2,10 @@
 read_verilog -sv rtl/pe.v
 read_verilog -sv rtl/systolic_array.v
 
-# 2. Elaborate hierarchy with parameters and keep top intact
+# 2. Elaborate hierarchy with parameters
 hierarchy -check -top systolic_array -chparam N __ARRAY_SIZE__ -chparam WIDTH __DATA_WIDTH__
 
-# 3. Direct synth pass to use the elaborated hierarchy without specifying top again
+# 3. Synthesize elaborated top module
 synth -flatten
 
 # 4. Tech mapping & optimization
@@ -13,6 +13,9 @@ dfflibmap -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sk
 abc -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
 clean
 
-# 5. Output netlist
+# 5. Restore top module name for OpenROAD linking
+rename -top systolic_array
+
+# 6. Output netlist & report stats
 write_verilog -noattr systolic_project/synth/systolic_netlist.v
 stat -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib

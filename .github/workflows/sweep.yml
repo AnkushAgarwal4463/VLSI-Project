@@ -16,28 +16,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check disk space (before install)
-        run: df -h .
-
       - name: Cache Conda Toolchain
         id: cache-conda
         uses: actions/cache@v4
         with:
           path: ./conda-env
-          key: ${{ runner.os }}-condapdk-v2-alwayscopy
+          key: ${{ runner.os }}-condapdk-v4-diskfix
 
-      - name: Install toolchain (always-copy, verbose, timed)
+      - name: Free up disk space before install
+        if: steps.cache-conda.outputs.cache-hit != 'true'
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h .
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          echo "=== Disk space after cleanup ==="
+          df -h .
+
+      - name: Install toolchain (verbose, timed)
         if: steps.cache-conda.outputs.cache-hit != 'true'
         timeout-minutes: 40
         run: |
+          set -euo pipefail
           echo "=== Downloading micromamba ==="
           curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
-
-          echo "=== Installing toolchain (always-copy avoids hardlink stalls) ==="
-          ./bin/micromamba create --yes --always-copy --prefix ./conda-env \
+          
+          echo "=== Installing toolchain ==="
+          ./bin/micromamba create --yes --prefix ./conda-env \
             --channel litex-hub --channel main \
             open_pdks.sky130a openroad yosys \
             -vv 2>&1 | tee install.log
+            
+          echo "=== Disk space after install ==="
+          df -h .
           echo "=== Install step finished ==="
 
       - name: Upload install log (always, even on failure)

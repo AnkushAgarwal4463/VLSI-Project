@@ -1,4 +1,4 @@
-import odb, sys, re, json, os
+import odb, sys, re, json, os, math
 
 def extract(run_dir, run_tag, util, clk_period, array_size, data_width):
     odb_path = f"{run_dir}/final.odb"
@@ -15,32 +15,40 @@ def extract(run_dir, run_tag, util, clk_period, array_size, data_width):
     xs, ys, areas = [], [], []
     for inst in insts:
         bbox = inst.getBBox()
-        xs.append((bbox.xMin()+bbox.xMax())/2.0)
-        ys.append((bbox.yMin()+bbox.yMax())/2.0)
-        areas.append((bbox.xMax()-bbox.xMin())*(bbox.yMax()-bbox.yMin()))
+        xs.append((bbox.xMin() + bbox.xMax()) / 2.0)
+        ys.append((bbox.yMin() + bbox.yMax()) / 2.0)
+        areas.append((bbox.xMax() - bbox.xMin()) * (bbox.yMax() - bbox.yMin()))
 
-    import numpy as np
-    xs, ys, areas = np.array(xs), np.array(ys), np.array(areas)
-    x_spread = float(xs.std()) if len(xs) else 0.0
-    y_spread = float(ys.std()) if len(ys) else 0.0
+    def std_dev(vals):
+        if not vals:
+            return 0.0
+        mean = sum(vals) / len(vals)
+        variance = sum((x - mean) ** 2 for x in vals) / len(vals)
+        return math.sqrt(variance)
+
+    x_spread = std_dev(xs)
+    y_spread = std_dev(ys)
 
     nets = block.getNets()
-    fanouts = [len(n.getITerms())-1 for n in nets if len(n.getITerms()) > 1]
-    avg_fanout = float(np.mean(fanouts)) if fanouts else 0.0
-    max_fanout = float(np.max(fanouts)) if fanouts else 0.0
+    fanouts = [len(n.getITerms()) - 1 for n in nets if len(n.getITerms()) > 1]
+    avg_fanout = float(sum(fanouts) / len(fanouts)) if fanouts else 0.0
+    max_fanout = float(max(fanouts)) if fanouts else 0.0
 
     core = block.getCoreArea()
-    core_area = (core.xMax()-core.xMin()) * (core.yMax()-core.yMin())
-    total_cell_area = float(areas.sum())
+    core_area = (core.xMax() - core.xMin()) * (core.yMax() - core.yMin())
+    total_cell_area = float(sum(areas))
 
     max_overflow, mean_overflow, overflow_tiles = 0.0, 0.0, 0
     try:
         with open(f"{run_dir}/congestion.rpt") as f:
-            overflows = [float(m.group(1)) for line in f
-                         if (m := re.search(r'overflow[:\s]+([0-9.]+)', line, re.IGNORECASE))]
+            overflows = [
+                float(m.group(1))
+                for line in f
+                if (m := re.search(r'overflow[:\s]+([0-9.]+)', line, re.IGNORECASE))
+            ]
             if overflows:
                 max_overflow = max(overflows)
-                mean_overflow = sum(overflows)/len(overflows)
+                mean_overflow = sum(overflows) / len(overflows)
                 overflow_tiles = sum(1 for o in overflows if o > 0)
     except FileNotFoundError:
         pass

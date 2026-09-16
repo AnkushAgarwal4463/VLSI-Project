@@ -20,10 +20,11 @@ create_clock -name clk -period $clk_period [get_ports clk]
 
 puts ">>> STAGE: floorplanning"
 initialize_floorplan -utilization $util -aspect_ratio 1.0 -core_space 2.0 -site unithd
+make_tracks
 puts ">>> STAGE: floorplan OK"
 
 puts ">>> STAGE: pin placement"
-place_pins -random -hor_layers met3 -ver_layers met2
+place_pins -random -hor_layer met3 -ver_layer met2
 puts ">>> STAGE: pin placement OK"
 
 puts ">>> STAGE: global placement"

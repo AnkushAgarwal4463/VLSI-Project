@@ -1,6 +1,9 @@
-name: Systolic Array Congestion Sweep (Diagnostic Build)
+name: Systolic Array Congestion Sweep (72-Run Matrix)
+
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
 
 jobs:
   run-sweep:
@@ -8,11 +11,13 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
-        array_size: [4]
-        data_width: [8]
-        utilization: [70]
-        clk_period: [5.0]
+        array_size: [4, 8, 16]
+        data_width: [8, 16, 32]
+        utilization: [50, 60, 70, 80]
+        clk_period: [3.0, 5.0]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -55,7 +60,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: install-log
+          name: install-log-${{ matrix.array_size }}-${{ matrix.data_width }}-${{ matrix.utilization }}-${{ matrix.clk_period }}
           path: install.log
           if-no-files-found: ignore
 
@@ -102,7 +107,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: synth-outputs
+          name: synth-outputs-${{ env.RUN_TAG }}
           path: |
             systolic_project/synth/
             scripts/synth_run.ys
@@ -132,13 +137,13 @@ jobs:
         env:
           RUN_DIR: systolic_project/runs/${{ env.RUN_TAG }}
         run: |
-          openroad -python scripts/extract_features.py \
+          openroad -exit -python scripts/extract_features.py \
             systolic_project/runs/${RUN_TAG} ${RUN_TAG} ${UTIL} ${CLK_PERIOD} ${ARRAY_SIZE} ${DATA_WIDTH} \
-            > systolic_project/runs/${RUN_TAG}_features.json
+            2>/dev/null > systolic_project/runs/${RUN_TAG}_features.json
           echo "=== Extracted features ==="
           cat systolic_project/runs/${RUN_TAG}_features.json
 
-      - name: Upload final results
+      - name: Upload final feature JSON result
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -149,7 +154,51 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "### Run Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### Run Summary for ${{ env.RUN_TAG }}" >> $GITHUB_STEP_SUMMARY
           echo "- Netlist produced: $(test -f systolic_project/synth/systolic_netlist.v && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
           echo "- final.odb produced: $(test -f systolic_project/runs/${RUN_TAG}/final.odb && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
           echo "- Features JSON produced: $(test -f systolic_project/runs/${RUN_TAG}_features.json && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
+
+  combine-results:
+    name: Aggregate CSV Dataset
+    needs: run-sweep
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all result artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: result-*
+          path: downloaded_results
+          merge-multiple: true
+
+      - name: Compile CSV Dataset
+        run: |
+          python3 -c "
+          import glob, json, pandas as pd
+
+          files = glob.glob('downloaded_results/*_features.json')
+          records = []
+          for f in files:
+              try:
+                  with open(f, 'r') as fp:
+                      text = fp.read().strip()
+                      # Ensure standard clean JSON extraction
+                      json_str = text[text.find('{'):text.rfind('}')+1]
+                      records.append(json.loads(json_str))
+              except Exception as e:
+                  print(f'Error reading {f}: {e}')
+
+          if records:
+              df = pd.DataFrame(records)
+              df.to_csv('placement_dataset.csv', index=False)
+              print(f'Successfully wrote {len(df)} runs to placement_dataset.csv')
+          else:
+              print('No valid feature JSON files were found.')
+          "
+
+      - name: Upload Compiled CSV Dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: placement-dataset-csv
+          path: placement_dataset.csv

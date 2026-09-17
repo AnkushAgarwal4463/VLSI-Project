@@ -1,7 +1,7 @@
-set util       $::env(UTIL)
-set clk_period $::env(CLK_PERIOD)
-set run_tag    $::env(RUN_TAG)
-set out_dir    "systolic_project/runs/$run_tag"
+set util        $::env(UTIL)
+set clk_period  $::env(CLK_PERIOD)
+set run_tag     $::env(RUN_TAG)
+set out_dir     "systolic_project/runs/$run_tag"
 file mkdir $out_dir
 
 set pdk_lib "./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib"
@@ -28,7 +28,8 @@ place_pins -random -hor_layer met3 -ver_layer met2
 puts ">>> STAGE: pin placement OK"
 
 puts ">>> STAGE: global placement"
-global_placement -density [expr {$util / 100.0 + 0.1}]
+set gp_density [expr {min(($util / 100.0) + 0.05, 0.95)}]
+global_placement -density $gp_density
 puts ">>> STAGE: detailed placement"
 detailed_placement
 check_placement

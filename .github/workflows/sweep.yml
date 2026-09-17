@@ -133,7 +133,7 @@ jobs:
           RUN_DIR: systolic_project/runs/${{ env.RUN_TAG }}
         run: |
           openroad -python scripts/extract_features.py \
-            systolic_project/runs/$RUN_TAG $RUN_TAG $UTIL $CLK_PERIOD $ARRAY_SIZE $DATA_WIDTH \
+            systolic_project/runs/${RUN_TAG} ${RUN_TAG} ${UTIL} ${CLK_PERIOD} ${ARRAY_SIZE} ${DATA_WIDTH} \
             > systolic_project/runs/${RUN_TAG}_features.json
           echo "=== Extracted features ==="
           cat systolic_project/runs/${RUN_TAG}_features.json
@@ -143,7 +143,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: result-${{ env.RUN_TAG }}
-          path: systolic_project/runs/
+          path: systolic_project/runs/${{ env.RUN_TAG }}_features.json
           if-no-files-found: warn
 
       - name: Summary

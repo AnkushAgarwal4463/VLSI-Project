@@ -129,6 +129,8 @@ jobs:
 
       - name: Extract features
         if: success()
+        env:
+          RUN_DIR: systolic_project/runs/${{ env.RUN_TAG }}
         run: |
           openroad -python scripts/extract_features.py \
             systolic_project/runs/$RUN_TAG $RUN_TAG $UTIL $CLK_PERIOD $ARRAY_SIZE $DATA_WIDTH \

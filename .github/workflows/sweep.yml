@@ -19,17 +19,31 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Conda Environment & OpenROAD
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v3
         with:
           auto-update-conda: true
           python-version: "3.10"
           activate-environment: test
           environment-file: environment.yml
 
-      - name: Execute Physical Design Flow
+      - name: Inject Parameters & Execute Synthesis (Yosys)
+        shell: bash -l {0}
+        env:
+          ARRAY_SIZE: "${{ matrix.array_size }}"
+          DATA_WIDTH: "${{ matrix.data_width }}"
+        run: |
+          # Replace placeholder parameter values in synth.ys dynamically
+          sed -i "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" scripts/synth.ys
+          sed -i "s/__DATA_WIDTH__/${DATA_WIDTH}/g" scripts/synth.ys
+          
+          # Run Yosys RTL Synthesis
+          yosys -s scripts/synth.ys
+
+      - name: Execute Physical Design Flow (OpenROAD)
+        shell: bash -l {0}
         env:
           RUN_TAG: "run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}"
           ARRAY_SIZE: "${{ matrix.array_size }}"
@@ -38,9 +52,15 @@ jobs:
           CLK_PERIOD: "${{ matrix.clk }}"
         run: |
           mkdir -p systolic_project/runs/$RUN_TAG
+          
+          # Update clock target dynamically in constraints.sdc
+          sed -i "s/-period [0-9.]*/-period ${CLK_PERIOD}/g" constraints.sdc
+
+          # Run OpenROAD Place & Route flow
           openroad -exit scripts/flow.tcl > systolic_project/runs/$RUN_TAG/openroad.log 2>&1 || true
 
       - name: Extract Matrix Features
+        shell: bash -l {0}
         env:
           RUN_DIR: "systolic_project/runs/run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}"
           RUN_TAG: "run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}"
@@ -49,10 +69,10 @@ jobs:
           UTIL: "${{ matrix.util }}"
           CLK_PERIOD: "${{ matrix.clk }}"
         run: |
-          python3 extract_features.py
+          python3 scripts/extract_features.py
 
       - name: Upload Single Run Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: features-run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}
           path: systolic_project/runs/run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}/*_features.json
@@ -62,10 +82,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
@@ -73,17 +93,20 @@ jobs:
         run: |
           pip install pandas
 
-      - name: Download All Artifacts
-        uses: actions/download-artifact@v3
+      - name: Download All Matrix Run Artifacts
+        uses: actions/download-artifact@v4
         with:
           path: systolic_project/runs
+          pattern: features-*
+          merge-multiple: true
 
       - name: Aggregate CSV Dataset
         run: |
-          python3 aggregate_dataset.py
+          mkdir -p dataset
+          python3 scripts/aggregate_dataset.py
 
       - name: Upload Aggregated Dataset
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: placement_dataset_real
           path: dataset/placement_dataset_real.csv

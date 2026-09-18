@@ -1,51 +1,66 @@
 # ==============================================================================
-# 1. Read source files
+# Yosys RTL Synthesis Script for OpenROAD Matrix Pipeline (scripts/synth.ys)
 # ==============================================================================
+
+# Ensure target build directory exists
+exec mkdir -p systolic_project/synth
+
+# ------------------------------------------------------------------------------
+# 1. Read SystemVerilog RTL Source Files
+# ------------------------------------------------------------------------------
 read_verilog -sv rtl/pe.v
 read_verilog -sv rtl/systolic_array.v
 
-# ==============================================================================
-# 2. Elaborate hierarchy with parameters
-# ==============================================================================
+# ------------------------------------------------------------------------------
+# 2. Elaborate Design Hierarchy with Injected Matrix Parameters
+# ------------------------------------------------------------------------------
+# __ARRAY_SIZE__ and __DATA_WIDTH__ placeholders are substituted via sed in CI
 hierarchy -check -top systolic_array -chparam N __ARRAY_SIZE__ -chparam WIDTH __DATA_WIDTH__
 
-# ==============================================================================
-# 3. High-level synthesis & logic cleanup
-# ==============================================================================
+# ------------------------------------------------------------------------------
+# 3. Generic Synthesis & Logic Optimization Passes
+# ------------------------------------------------------------------------------
 proc
-opt
+opt_expr
+opt_clean
+check
 fsm
 opt
-expr
+wreduce
+peepopt
+opt_clean
+techmap
 opt
 
-# ==============================================================================
-# 4. Sequential & Technology Mapping (Nangate45)
-# ==============================================================================
-# Map DFFs to Nangate45 flip-flops
+# ------------------------------------------------------------------------------
+# 4. Technology Mapping to Nangate45 Standard Cell Library
+# ------------------------------------------------------------------------------
+# Resolve unmapped undefined values to zero to prevent floating logic
+setundef -zero
+
+# Map DFF flip-flops to Nangate45 Liberty gates
 dfflibmap -liberty pdk/Nangate45/NangateOpenCellLibrary_typical.lib
 
-# Map combinational logic using ABC
-abc -liberty pdk/Nangate45/NangateOpenCellLibrary_typical.lib
+# Optimize combinational logic using ABC mapper
+abc -liberty pdk/Nangate45/NangateOpenCellLibrary_typical.lib -script +strash;scorr;ifraig;retime,{D};strash;dch,-f;map,-M,1,{D}
 
-# Flatten remaining hierarchy and split vector nets to explicit scalar wires
+# Flatten hierarchy and sanitize internal vector wire names
 flatten
 splitnets -ports
 opt
 clean
+renamesimple -prefix _
 
-# ==============================================================================
-# 5. Restore Top Module Name
-# ==============================================================================
+# ------------------------------------------------------------------------------
+# 5. Restore Top Module Design Name
+# ------------------------------------------------------------------------------
 rename -top systolic_array
 
-# ==============================================================================
-# 6. Sanitize and Output Netlist for OpenROAD
-# ==============================================================================
-# -noattr: Strips (* src = ... *) and Yosys attributes
-# -noexpr: Converts math/logic expressions into pure standard-cell pin connections
-# -nohex / -nodec: Enforces plain bit string constants
+# ------------------------------------------------------------------------------
+# 6. Output Cleaned Structural Verilog Netlist
+# ------------------------------------------------------------------------------
+# Write gate-level netlist formatted specifically for OpenROAD compatibility
 write_verilog -noattr -noexpr -nohex -nodec systolic_project/synth/systolic_netlist.v
 
-# Report timing and area statistics
+# Print synthesis area and standard cell utilization statistics
 stat -liberty pdk/Nangate45/NangateOpenCellLibrary_typical.lib

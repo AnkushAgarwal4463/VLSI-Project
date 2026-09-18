@@ -1,64 +1,79 @@
 # ==============================================================================
-# OpenROAD Automated Physical Design Flow - Matrix Benchmark (Nangate45)
+# 1. Load PDK Technology LEF, Macro LEF, and Liberty Files
 # ==============================================================================
+read_lef pdk/Nangate45/NangateOpenCellLibrary.tech.lef
+read_lef pdk/Nangate45/NangateOpenCellLibrary.macro.mod.lef
+read_liberty pdk/Nangate45/NangateOpenCellLibrary_typical.lib
 
-# Thread safety & logging performance
-set_thread_count 4
-suppress_message "GPL" 1
-suppress_message "GRT" 1
+# ==============================================================================
+# 2. Read Structural Netlist and Initialize Design
+# ==============================================================================
+read_verilog systolic_project/synth/systolic_netlist.v
+link_design systolic_array
 
-# Extract matrix parameters from shell environment with fallbacks
-set RUN_TAG $::env(RUN_TAG)
-set UTIL $::env(UTIL)
-set CLK_PERIOD $::env(CLK_PERIOD)
-set ARRAY_SIZE $::env(ARRAY_SIZE)
-set DATA_WIDTH $::env(DATA_WIDTH)
+# Read SDC constraints for timing setup
+read_sdc constraints.sdc
 
-set OUT_DIR "systolic_project/runs/$RUN_TAG"
-file mkdir $OUT_DIR
+# ==============================================================================
+# 3. Floorplanning & Power Grid Generation
+# ==============================================================================
+# Initialize die area with 50% utilization, 10um margin around core
+initialize_floorplan -utilization 50 -aspect_ratio 1.0 -core_space 10
 
-# ------------------------------------------------------------------------------
-# 1. Tech & Liberty Setup (Nangate45)
-# ------------------------------------------------------------------------------
-read_lef "pdk/Nangate45/NangateOpenCellLibrary.tech.lef"
-read_lef "pdk/Nangate45/NangateOpenCellLibrary.macro.mod.lef"
-read_liberty "pdk/Nangate45/NangateOpenCellLibrary_typical.lib"
-
-# Load synthesized netlist
-read_verilog "systolic_project/netlists/systolic_array.v"
-link_design "systolic_array"
-
-# ------------------------------------------------------------------------------
-# 2. Constraints & Floorplanning
-# ------------------------------------------------------------------------------
-create_clock -name clk -period $CLK_PERIOD [get_ports clk]
-set_input_delay -clock clk 0.2 [all_inputs]
-set_output_delay -clock clk 0.2 [all_outputs]
-
-# Site definition and core utilization floorplan
-initialize_floorplan -utilization $UTIL -aspect_ratio 1.0 -core_space 10.0 -site FreePDK45_38x28_10g_2800
-
-# ------------------------------------------------------------------------------
-# 3. Placement & Clock Tree Synthesis (CTS)
-# ------------------------------------------------------------------------------
+# Place primary I/O pins automatically around perimeter
 place_pins -hor_layers metal3 -ver_layers metal2
-global_placement -density 0.6
+
+# Generate Power/Ground stripes (VDD / VSS)
+make_tracks
+add_global_connection -net VDD -inst_pattern .* -pin_pattern VDD -power
+add_global_connection -net VSS -inst_pattern .* -pin_pattern VSS -ground
+
+# ==============================================================================
+# 4. Placement Stage
+# ==============================================================================
+# Insert well-taps and end-caps to prevent latch-up
+tapcell -endcap_master TAPCELL_X1 -distance 14
+
+# Global placement (place standard cells roughly)
+global_placement
+
+# Detailed placement (legalize cell positions)
 detailed_placement
-optimize_mirroring
 
-clock_tree_synthesis -root_buf CLKBUF_X3 -buf_list "CLKBUF_X1 CLKBUF_X2 CLKBUF_X3"
+# ==============================================================================
+# 5. Clock Tree Synthesis (CTS)
+# ==============================================================================
+# Build clock tree buffers for low skew
+configure_cts -buf_list {BUF_X1 BUF_X2 BUF_X4}
+clock_tree_synthesis
 
-# ------------------------------------------------------------------------------
-# 4. Routing & Detailed Extraction
-# ------------------------------------------------------------------------------
+# Re-legalize placement after CTS buffer insertion
+detailed_placement
+
+# ==============================================================================
+# 6. Routing Stage
+# ==============================================================================
+# Global routing (estimate wire tracks)
 global_route
-detail_route -max_it 8
 
-# Save final physical database
-write_db "$OUT_DIR/final.odb"
+# Detailed routing using TritonRoute
+detailed_route
 
-# Report timing and global routing congestion
-report_checks -path_delay max -fields {slack cap cell fanout line} -digits 4 > "$OUT_DIR/timing.rpt"
-report_congestion > "$OUT_DIR/congestion.rpt"
+# Insert filler cells to fill empty core spaces
+filler_placement -filler_masters {FILLCELL_X1 FILLCELL_X2 FILLCELL_X4 FILLCELL_X8}
 
+# ==============================================================================
+# 7. Final STA & Export Output Artifacts
+# ==============================================================================
+# Check for setup/hold timing violations
+report_checks -path_delay min_max -fields {slew cap input fanout} -digits 3
+
+# Report total chip power breakdown
+report_power
+
+# Export layout (DEF) and routed netlist
+write_def systolic_project/pnr/systolic_array.def
+write_verilog systolic_project/pnr/systolic_array_pnr.v
+
+puts "=== OpenROAD Flow Completed Successfully ==="
 exit

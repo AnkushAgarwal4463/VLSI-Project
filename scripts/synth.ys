@@ -1,21 +1,51 @@
+# ==============================================================================
 # 1. Read source files
+# ==============================================================================
 read_verilog -sv rtl/pe.v
 read_verilog -sv rtl/systolic_array.v
 
+# ==============================================================================
 # 2. Elaborate hierarchy with parameters
+# ==============================================================================
 hierarchy -check -top systolic_array -chparam N __ARRAY_SIZE__ -chparam WIDTH __DATA_WIDTH__
 
-# 3. Synthesize elaborated top module
-synth -flatten
+# ==============================================================================
+# 3. High-level synthesis & logic cleanup
+# ==============================================================================
+proc
+opt
+fsm
+opt
+expr
+opt
 
-# 4. Tech mapping & optimization
-dfflibmap -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
-abc -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+# ==============================================================================
+# 4. Sequential & Technology Mapping (Nangate45)
+# ==============================================================================
+# Map DFFs to Nangate45 flip-flops
+dfflibmap -liberty pdk/Nangate45/NangateOpenCellLibrary_typical.lib
+
+# Map combinational logic using ABC
+abc -liberty pdk/Nangate45/NangateOpenCellLibrary_typical.lib
+
+# Flatten remaining hierarchy and split vector nets to explicit scalar wires
+flatten
+splitnets -ports
+opt
 clean
 
-# 5. Restore top module name for OpenROAD linking
+# ==============================================================================
+# 5. Restore Top Module Name
+# ==============================================================================
 rename -top systolic_array
 
-# 6. Output netlist & report stats
-write_verilog -noattr systolic_project/synth/systolic_netlist.v
-stat -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+# ==============================================================================
+# 6. Sanitize and Output Netlist for OpenROAD
+# ==============================================================================
+# -noattr: Strips (* src = ... *) and Yosys attributes
+# -noexpr: Converts math/logic expressions into pure standard-cell pin connections
+# -nohex / -nodec: Enforces plain bit string constants
+write_verilog -noattr -noexpr -nohex -nodec systolic_project/synth/systolic_netlist.v
+
+# Report timing and area statistics
+stat -liberty pdk/Nangate45/NangateOpenCellLibrary_typical.lib

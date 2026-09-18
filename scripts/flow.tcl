@@ -1,68 +1,64 @@
-# Extract environment variables
-set util        $::env(UTIL)
-set clk_period  $::env(CLK_PERIOD)
-set run_tag     $::env(RUN_TAG)
-set out_dir     "systolic_project/runs/$run_tag"
-file mkdir $out_dir
+# ==============================================================================
+# OpenROAD Automated Physical Design Flow - Matrix Benchmark
+# ==============================================================================
 
-# Set multi-threading to speed up physical design steps
+# Thread safety & logging performance
 set_thread_count 4
+suppress_message "GPL" 1
+suppress_message "GRT" 1
 
-# PDK file paths
-set pdk_lib "./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib"
-set pdk_lef "./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/techlef/sky130_fd_sc_hd__nom.tlef"
-set cell_lef "./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lef/sky130_fd_sc_hd.lef"
+# Extract matrix parameters from shell environment with fallbacks
+set RUN_TAG $::env(RUN_TAG)
+set UTIL $::env(UTIL)
+set CLK_PERIOD $::env(CLK_PERIOD)
+set ARRAY_SIZE $::env(ARRAY_SIZE)
+set DATA_WIDTH $::env(DATA_WIDTH)
 
-puts ">>> STAGE: reading LEF/LIB/netlist"
-read_lef $pdk_lef
-read_lef $cell_lef
-read_liberty $pdk_lib
-read_verilog systolic_project/synth/systolic_netlist.v
-link_design systolic_array
-puts ">>> STAGE: design linked OK"
+set OUT_DIR "systolic_project/runs/$RUN_TAG"
+file mkdir $OUT_DIR
 
-# Apply clock constraints
-create_clock -name clk -period $clk_period [get_ports clk]
+# ------------------------------------------------------------------------------
+# 1. Tech & Liberty Setup (Nangate45)
+# ------------------------------------------------------------------------------
+read_lef "pdk/Nangate45/NangateOpenCellLibrary.tech.lef"
+read_lef "pdk/Nangate45/NangateOpenCellLibrary.macro.lef"
+read_liberty "pdk/Nangate45/NangateOpenCellLibrary_typical.lib"
 
-puts ">>> STAGE: floorplanning"
-initialize_floorplan -utilization $util -aspect_ratio 1.0 -core_space 2.0 -site unithd
-make_tracks
-puts ">>> STAGE: floorplan OK"
+# Load synthesized netlist
+read_verilog "systolic_project/netlists/systolic_array.v"
+link_design "systolic_array"
 
-puts ">>> STAGE: pin placement"
-place_pins -random -hor_layer met3 -ver_layer met2
-puts ">>> STAGE: pin placement OK"
+# ------------------------------------------------------------------------------
+# 2. Constraints & Floorplanning
+# ------------------------------------------------------------------------------
+create_clock -name clk -period $CLK_PERIOD [get_ports clk]
+set_input_delay -clock clk 0.2 [all_inputs]
+set_output_delay -clock clk 0.2 [all_outputs]
 
-puts ">>> STAGE: global placement"
-set gp_density [expr {min(($util / 100.0) + 0.05, 0.95)}]
-global_placement -density $gp_density
+# Site definition and core utilization floorplan
+initialize_floorplan -utilization $UTIL -aspect_ratio 1.0 -core_space 10.0 -site FreePDK45_38x28_10g_2800
 
-puts ">>> STAGE: detailed placement"
+# ------------------------------------------------------------------------------
+# 3. Placement & Clock Tree Synthesis (CTS)
+# ------------------------------------------------------------------------------
+place_pins -hor_layers metal3 -ver_layers metal2
+global_placement -density 0.6
 detailed_placement
-check_placement
-puts ">>> STAGE: placement OK"
+optimize_mirroring
 
-puts ">>> STAGE: global routing"
-global_route -congestion_report_file $out_dir/congestion.rpt \
-             -guide_file $out_dir/route.guide
-puts ">>> STAGE: global routing OK"
+clock_tree_synthesis -root_buf CLKBUF_X3 -buf_list "CLKBUF_X1 CLKBUF_X2 CLKBUF_X3"
 
-estimate_parasitics -placement
-puts "=== TIMING (post-placement, pre-route) ==="
-report_worst_slack -max
-report_tns
+# ------------------------------------------------------------------------------
+# 4. Routing & Detailed Extraction
+# ------------------------------------------------------------------------------
+global_route
+detail_route -max_it 8
 
-puts ">>> STAGE: detailed routing (Fast Matrix Mode)"
-# Speed up TritonRoute by capping iterations to 8 and reducing log bloat
-detailed_route -max_it 8 -verbose 0 -drc_report_iter_step 0
-puts ">>> STAGE: detailed routing OK"
+# Save final physical database
+write_db "$OUT_DIR/final.odb"
 
-estimate_parasitics -global_routing
-puts "=== TIMING (post-route) ==="
-report_worst_slack -max
-report_tns
+# Report timing and global routing congestion
+report_checks -path_delay max -fields {slack cap cell fanout line} -digits 4 > "$OUT_DIR/timing.rpt"
+report_congestion "$OUT_DIR/congestion.rpt"
 
-puts ">>> STAGE: writing outputs"
-write_def $out_dir/final.def
-write_db  $out_dir/final.odb
-puts "RUN COMPLETE: $run_tag"
+exit

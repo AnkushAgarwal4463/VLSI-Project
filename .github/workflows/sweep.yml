@@ -1,4 +1,4 @@
-name: Systolic Array Congestion Sweep (72-Run Matrix)
+name: OpenROAD 72-Run Matrix Optimization Pipeline
 
 on:
   workflow_dispatch:
@@ -6,199 +6,84 @@ on:
     branches: [ main ]
 
 jobs:
-  run-sweep:
+  run-matrix:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 12
       matrix:
         array_size: [4, 8, 16]
-        data_width: [8, 16, 32]
-        utilization: [50, 60, 70, 80]
-        clk_period: [3.0, 5.0]
+        data_width: [8, 16]
+        util: [30, 50, 70]
+        clk: [5.0, 10.0, 15.0, 20.0]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-      - name: Cache Conda Toolchain
-        id: cache-conda
-        uses: actions/cache@v4
+      - name: Set up Conda Environment & OpenROAD
+        uses: conda-incubator/setup-miniconda@v2
         with:
-          path: ./conda-env
-          key: ${{ runner.os }}-condapdk-v4-diskfix
+          auto-update-conda: true
+          python-version: "3.10"
+          activate-environment: test
+          environment-file: environment.yml
 
-      - name: Free up disk space before install
-        if: steps.cache-conda.outputs.cache-hit != 'true'
-        run: |
-          echo "=== Disk space before cleanup ==="
-          df -h .
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          sudo apt-get clean
-          echo "=== Disk space after cleanup ==="
-          df -h .
-
-      - name: Install toolchain (verbose, timed)
-        if: steps.cache-conda.outputs.cache-hit != 'true'
-        timeout-minutes: 40
-        run: |
-          set -euo pipefail
-          echo "=== Downloading micromamba ==="
-          curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
-          
-          echo "=== Installing toolchain ==="
-          ./bin/micromamba create --yes --prefix ./conda-env \
-            --channel litex-hub --channel main \
-            open_pdks.sky130a openroad yosys \
-            -vv 2>&1 | tee install.log
-            
-          echo "=== Disk space after install ==="
-          df -h .
-          echo "=== Install step finished ==="
-
-      - name: Upload install log (always, even on failure)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: install-log-${{ matrix.array_size }}-${{ matrix.data_width }}-${{ matrix.utilization }}-${{ matrix.clk_period }}
-          path: install.log
-          if-no-files-found: ignore
-
-      - name: Add toolchain to PATH
-        run: echo "$(pwd)/conda-env/bin" >> $GITHUB_PATH
-
-      - name: Verify toolchain is actually usable
-        run: |
-          echo "=== which yosys ==="
-          which yosys || (echo "FAIL: yosys not found on PATH" && exit 1)
-          yosys --version
-          echo "=== which openroad ==="
-          which openroad || (echo "FAIL: openroad not found on PATH" && exit 1)
-          openroad -version
-          echo "=== PDK check ==="
-          ls -la ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/ | head -5 || \
-            (echo "FAIL: sky130 liberty files not found where expected" && exit 1)
-
-      - name: Set run environment
-        run: |
-          echo "ARRAY_SIZE=${{ matrix.array_size }}" >> $GITHUB_ENV
-          echo "DATA_WIDTH=${{ matrix.data_width }}" >> $GITHUB_ENV
-          echo "UTIL=${{ matrix.utilization }}" >> $GITHUB_ENV
-          echo "CLK_PERIOD=${{ matrix.clk_period }}" >> $GITHUB_ENV
-          echo "RUN_TAG=sys${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.utilization }}_clk${{ matrix.clk_period }}" >> $GITHUB_ENV
-
-      - name: Synthesize
-        timeout-minutes: 10
-        run: |
-          mkdir -p systolic_project/synth systolic_project/runs
-          cp scripts/synth.ys scripts/synth_run.ys
-          sed -i "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" scripts/synth_run.ys
-          sed -i "s/__DATA_WIDTH__/${DATA_WIDTH}/g" scripts/synth_run.ys
-          echo "=== Resolved synth_run.ys ==="
-          cat scripts/synth_run.ys
-          echo "=== Running Yosys ==="
-          yosys -s scripts/synth_run.ys 2>&1 | tee systolic_project/synth/synth_log.txt
-          echo "=== Checking netlist was actually produced ==="
-          test -f systolic_project/synth/systolic_netlist.v || \
-            (echo "FAIL: netlist not produced" && exit 1)
-          wc -l systolic_project/synth/systolic_netlist.v
-
-      - name: Upload synthesis outputs (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: synth-outputs-${{ env.RUN_TAG }}
-          path: |
-            systolic_project/synth/
-            scripts/synth_run.ys
-          if-no-files-found: warn
-
-      - name: Run OpenROAD flow
-        timeout-minutes: 30
-        run: |
-          echo "=== Running flow.tcl ==="
-          openroad -exit scripts/flow.tcl 2>&1 | tee systolic_project/runs/${RUN_TAG}_log.txt
-          echo "=== Last 30 lines of the flow log ==="
-          tail -30 systolic_project/runs/${RUN_TAG}_log.txt
-          echo "=== Checking final.odb was actually produced ==="
-          test -f systolic_project/runs/${RUN_TAG}/final.odb || \
-            (echo "FAIL: final.odb not found -- flow did not complete. See stage markers above." && exit 1)
-
-      - name: Upload OpenROAD run outputs (always, even on failure)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: openroad-run-${{ env.RUN_TAG }}
-          path: systolic_project/runs/
-          if-no-files-found: warn
-
-      - name: Extract features
-        if: success()
+      - name: Execute Physical Design Flow
         env:
-          RUN_DIR: systolic_project/runs/${{ env.RUN_TAG }}
+          RUN_TAG: "run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}"
+          ARRAY_SIZE: "${{ matrix.array_size }}"
+          DATA_WIDTH: "${{ matrix.data_width }}"
+          UTIL: "${{ matrix.util }}"
+          CLK_PERIOD: "${{ matrix.clk }}"
         run: |
-          openroad -exit -python scripts/extract_features.py \
-            systolic_project/runs/${RUN_TAG} ${RUN_TAG} ${UTIL} ${CLK_PERIOD} ${ARRAY_SIZE} ${DATA_WIDTH} \
-            2>/dev/null > systolic_project/runs/${RUN_TAG}_features.json
-          echo "=== Extracted features ==="
-          cat systolic_project/runs/${RUN_TAG}_features.json
+          mkdir -p systolic_project/runs/$RUN_TAG
+          openroad -exit scripts/flow.tcl > systolic_project/runs/$RUN_TAG/openroad.log 2>&1 || true
 
-      - name: Upload final feature JSON result
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Extract Matrix Features
+        env:
+          RUN_DIR: "systolic_project/runs/run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}"
+          RUN_TAG: "run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}"
+          ARRAY_SIZE: "${{ matrix.array_size }}"
+          DATA_WIDTH: "${{ matrix.data_width }}"
+          UTIL: "${{ matrix.util }}"
+          CLK_PERIOD: "${{ matrix.clk }}"
+        run: |
+          python3 extract_features.py
+
+      - name: Upload Single Run Artifact
+        uses: actions/upload-artifact@v3
         with:
-          name: result-${{ env.RUN_TAG }}
-          path: systolic_project/runs/${{ env.RUN_TAG }}_features.json
-          if-no-files-found: warn
+          name: features-run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}
+          path: systolic_project/runs/run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}/*_features.json
 
-      - name: Summary
-        if: always()
-        run: |
-          echo "### Run Summary for ${{ env.RUN_TAG }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Netlist produced: $(test -f systolic_project/synth/systolic_netlist.v && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
-          echo "- final.odb produced: $(test -f systolic_project/runs/${RUN_TAG}/final.odb && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
-          echo "- Features JSON produced: $(test -f systolic_project/runs/${RUN_TAG}_features.json && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
-
-  combine-results:
-    name: Aggregate CSV Dataset
-    needs: run-sweep
-    if: always()
+  aggregate-results:
+    needs: run-matrix
     runs-on: ubuntu-latest
     steps:
-      - name: Download all result artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: result-*
-          path: downloaded_results
-          merge-multiple: true
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-      - name: Compile CSV Dataset
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Dependencies
         run: |
-          python3 -c "
-          import glob, json, pandas as pd
+          pip install pandas
 
-          files = glob.glob('downloaded_results/*_features.json')
-          records = []
-          for f in files:
-              try:
-                  with open(f, 'r') as fp:
-                      text = fp.read().strip()
-                      # Ensure standard clean JSON extraction
-                      json_str = text[text.find('{'):text.rfind('}')+1]
-                      records.append(json.loads(json_str))
-              except Exception as e:
-                  print(f'Error reading {f}: {e}')
-
-          if records:
-              df = pd.DataFrame(records)
-              df.to_csv('placement_dataset.csv', index=False)
-              print(f'Successfully wrote {len(df)} runs to placement_dataset.csv')
-          else:
-              print('No valid feature JSON files were found.')
-          "
-
-      - name: Upload Compiled CSV Dataset
-        uses: actions/upload-artifact@v4
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v3
         with:
-          name: placement-dataset-csv
-          path: placement_dataset.csv
+          path: systolic_project/runs
+
+      - name: Aggregate CSV Dataset
+        run: |
+          python3 aggregate_dataset.py
+
+      - name: Upload Aggregated Dataset
+        uses: actions/upload-artifact@v3
+        with:
+          name: placement_dataset_real
+          path: dataset/placement_dataset_real.csv

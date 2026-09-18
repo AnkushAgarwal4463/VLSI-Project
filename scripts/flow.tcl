@@ -1,5 +1,5 @@
 # ==============================================================================
-# OpenROAD Automated Physical Design Flow - Matrix Benchmark
+# OpenROAD Automated Physical Design Flow - Matrix Benchmark (Nangate45)
 # ==============================================================================
 
 # Thread safety & logging performance
@@ -21,7 +21,7 @@ file mkdir $OUT_DIR
 # 1. Tech & Liberty Setup (Nangate45)
 # ------------------------------------------------------------------------------
 read_lef "pdk/Nangate45/NangateOpenCellLibrary.tech.lef"
-read_lef "pdk/Nangate45/NangateOpenCellLibrary.macro.lef"
+read_lef "pdk/Nangate45/NangateOpenCellLibrary.macro.mod.lef"
 read_liberty "pdk/Nangate45/NangateOpenCellLibrary_typical.lib"
 
 # Load synthesized netlist
@@ -59,6 +59,6 @@ write_db "$OUT_DIR/final.odb"
 
 # Report timing and global routing congestion
 report_checks -path_delay max -fields {slack cap cell fanout line} -digits 4 > "$OUT_DIR/timing.rpt"
-report_congestion "$OUT_DIR/congestion.rpt"
+report_congestion > "$OUT_DIR/congestion.rpt"
 
 exit

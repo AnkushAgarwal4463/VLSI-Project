@@ -9,8 +9,8 @@ read_liberty $::env(LIB_FILE)
 read_verilog systolic_project/synth/systolic_netlist.v
 link_design systolic_array
 
-# 3. Read Dynamic Timing Constraints (SDC)
-read_sdc $::env(SDC_FILE)
+# 3. Read Generated SDC File
+read_sdc "systolic_project/synth/constraint.sdc"
 
 # 4. Floorplan Initialization
 initialize_floorplan -utilization $::env(UTIL) -aspect_ratio 1.0 -core_space 10.0

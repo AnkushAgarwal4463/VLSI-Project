@@ -1,8 +1,12 @@
 // pe.v -- Single Systolic Processing Element (Multiply-Accumulate)
 `default_nettype none
 
+`ifndef DATA_WIDTH
+  `define DATA_WIDTH 8
+`endif
+
 module pe #(
-    parameter WIDTH = 8
+    parameter WIDTH = `DATA_WIDTH
 ) (
     input  wire                 clk,
     input  wire                 rst_n,

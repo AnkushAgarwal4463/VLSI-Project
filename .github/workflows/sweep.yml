@@ -36,12 +36,12 @@ jobs:
           CLK_PERIOD: ${{ matrix.clk_period }}
           RUN_TAG: "a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}"
           PATH: /OpenROAD-flow-scripts/tools/install/OpenROAD/bin:/OpenROAD-flow-scripts/tools/install/yosys/bin:$PATH
+          PYTHONPATH: /OpenROAD-flow-scripts/tools/install/OpenROAD/lib/python:$PYTHONPATH
         run: |
           set -e
-          RUN_DIR="systolic_project/runs/${RUN_TAG}"
+          export RUN_DIR="systolic_project/runs/${RUN_TAG}"
           mkdir -p "${RUN_DIR}"
           mkdir -p "systolic_project/synth"
-          echo "RUN_DIR=${RUN_DIR}" >> $GITHUB_ENV
 
           # Substitute dynamic parameters into Yosys script
           sed -e "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" \

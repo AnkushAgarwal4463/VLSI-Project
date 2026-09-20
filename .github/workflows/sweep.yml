@@ -9,7 +9,7 @@ jobs:
   smoke-test:
     runs-on: ubuntu-latest
     container:
-      image: openroad/flow-scripts:latest
+      image: openroad/orfs:latest
 
     steps:
       - name: Checkout Code

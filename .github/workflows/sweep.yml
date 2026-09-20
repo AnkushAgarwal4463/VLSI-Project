@@ -34,6 +34,8 @@ jobs:
           UTIL: ${{ matrix.util }}
           CLK_PERIOD: ${{ matrix.clk_period }}
           RUN_TAG: "a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}"
+          RUN_DIR: "systolic_project/runs/a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}"
+          SDC_FILE: "systolic_project/runs/a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}/constraint.sdc"
           PATH: /OpenROAD-flow-scripts/tools/install/OpenROAD/bin:/OpenROAD-flow-scripts/tools/install/yosys/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
           PYTHONPATH: /OpenROAD-flow-scripts/tools/install/OpenROAD/lib/python:$PYTHONPATH
         run: |
@@ -53,7 +55,6 @@ jobs:
           echo "PDK TECH : $TECH_LEF_FILE"
           echo "PDK CELL : $CELL_LEF_FILE"
 
-          export RUN_DIR="systolic_project/runs/${RUN_TAG}"
           mkdir -p "${RUN_DIR}"
           mkdir -p "systolic_project/synth"
 
@@ -64,8 +65,7 @@ jobs:
               scripts/synth.ys > "${RUN_DIR}/synth_gen.ys"
 
           # 2. Dynamically generate SDC constraints matching the run's CLK_PERIOD
-          export SDC_FILE="${RUN_DIR}/constraint.sdc"
-          cat <<EOF > "${SDC_FILE}"
+          cat << 'EOF' > "${SDC_FILE}"
 create_clock -name clk -period ${CLK_PERIOD} [get_ports clk]
 set_input_delay 0.1 -clock clk [all_inputs]
 set_output_delay 0.1 -clock clk [all_outputs]

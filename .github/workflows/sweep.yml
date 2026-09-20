@@ -57,11 +57,19 @@ jobs:
           mkdir -p "${RUN_DIR}"
           mkdir -p "systolic_project/synth"
 
-          # Substitute dynamic parameters and PDK paths into Yosys script
+          # 1. Substitute dynamic parameters and PDK paths into Yosys script
           sed -e "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" \
               -e "s/__DATA_WIDTH__/${DATA_WIDTH}/g" \
               -e "s|__LIB_FILE__|${LIB_FILE}|g" \
               scripts/synth.ys > "${RUN_DIR}/synth_gen.ys"
+
+          # 2. Dynamically generate SDC constraints matching the run's CLK_PERIOD
+          export SDC_FILE="${RUN_DIR}/constraint.sdc"
+          cat <<EOF > "${SDC_FILE}"
+create_clock -name clk -period ${CLK_PERIOD} [get_ports clk]
+set_input_delay 0.1 -clock clk [all_inputs]
+set_output_delay 0.1 -clock clk [all_outputs]
+EOF
 
           echo "=== Starting Yosys Synthesis ==="
           yosys -s "${RUN_DIR}/synth_gen.ys" 2>&1 | tee "${RUN_DIR}/yosys.log"
@@ -80,6 +88,7 @@ jobs:
           path: |
             systolic_project/runs/*/*.log
             systolic_project/runs/*/synth_gen.ys
+            systolic_project/runs/*/constraint.sdc
 
       - name: Upload Run Feature JSON
         uses: actions/upload-artifact@v4

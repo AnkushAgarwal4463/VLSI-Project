@@ -2,14 +2,14 @@
 `default_nettype none
 
 module systolic_array #(
-    parameter int N     = 4,
-    parameter int WIDTH = 8
+    parameter N     = 4,
+    parameter WIDTH = 8
 ) (
-    input  wire                       clk,
-    input  wire                       rst_n,
-    input  wire [N*WIDTH-1:0]         a_edge_in,
-    input  wire [N*WIDTH-1:0]         b_edge_in,
-    output wire [N*N*2*WIDTH-1:0]     acc_flat
+    input  wire                     clk,
+    input  wire                     rst_n,
+    input  wire [N*WIDTH-1:0]       a_edge_in,
+    input  wire [N*WIDTH-1:0]       b_edge_in,
+    output wire [N*N*2*WIDTH-1:0]   acc_flat
 );
 
     // Internal 2D interconnect arrays
@@ -20,17 +20,17 @@ module systolic_array #(
     // Connect top and left boundary inputs
     genvar r, c;
     generate
-        for (r = 0; r < N; r++) begin : g_row_edge
+        for (r = 0; r < N; r = r + 1) begin : g_row_edge
             assign a_wire[r][0] = a_edge_in[r*WIDTH +: WIDTH];
         end
 
-        for (c = 0; c < N; c++) begin : g_col_edge
+        for (c = 0; c < N; c = c + 1) begin : g_col_edge
             assign b_wire[0][c] = b_edge_in[c*WIDTH +: WIDTH];
         end
 
         // Instantiate Processing Element (PE) matrix
-        for (r = 0; r < N; r++) begin : g_row
-            for (c = 0; c < N; c++) begin : g_col
+        for (r = 0; r < N; r = r + 1) begin : g_row
+            for (c = 0; c < N; c = c + 1) begin : g_col
                 pe #(
                     .WIDTH(WIDTH)
                 ) pe_inst (

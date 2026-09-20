@@ -8,6 +8,10 @@ on:
 jobs:
   run-matrix:
     runs-on: ubuntu-latest
+    # Run directly inside the official OpenROAD container where all EDA tools exist natively
+    container:
+      image: openroad/ubuntu22.04-builder:latest
+
     strategy:
       fail-fast: false
       matrix:
@@ -20,27 +24,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
+      # Install pandas inside the container for feature extraction
       - name: Install Python Dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install pandas
-
-      # 1. Install Yosys via apt (available natively)
-      - name: Install Yosys
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y yosys
-
-      # 2. Setup OpenROAD using official GitHub Action
-      - name: Setup OpenROAD
-        uses: PrecisionInnovations/setup-openroad@v1
-        with:
-          version: 'latest'
+          python3 -m pip install --upgrade pip || apt-get update && apt-get install -y python3-pip python3-pandas
+          pip3 install pandas || true
 
       - name: Execute Matrix Run
         env:

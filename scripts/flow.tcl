@@ -22,8 +22,13 @@ read_liberty pdk/Nangate45/NangateOpenCellLibrary_typical.lib
 read_verilog systolic_project/synth/systolic_netlist.v
 link_design systolic_array
 
-# Load SDC constraints
-read_sdc constraints.sdc
+# Load SDC constraints if file exists
+if {[file exists constraints.sdc]} {
+    read_sdc constraints.sdc
+}
+
+# Dynamically apply clock period from CI matrix
+create_clock -name clk -period $clk_period [get_ports clk]
 
 # ------------------------------------------------------------------------------
 # 3. Floorplanning & Power Grid Generation
@@ -78,6 +83,9 @@ detailed_placement
 # ------------------------------------------------------------------------------
 # 7. Final STA, Database Save & Export Output Artifacts
 # ------------------------------------------------------------------------------
+# Estimate Parasitics for post-route STA accuracy
+estimate_parasitics -global_routing
+
 # Static Timing Analysis checks
 report_checks -path_delay min_max -fields {slew cap input fanout} -digits 3
 report_power

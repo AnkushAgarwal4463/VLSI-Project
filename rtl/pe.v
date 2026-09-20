@@ -2,15 +2,15 @@
 `default_nettype none
 
 module pe #(
-    parameter int WIDTH = 8
+    parameter WIDTH = 8
 ) (
-    input  wire                   clk,
-    input  wire                   rst_n,
-    input  wire  [WIDTH-1:0]      a_in,
-    input  wire  [WIDTH-1:0]      b_in,
-    output logic [WIDTH-1:0]      a_out,
-    output logic [WIDTH-1:0]      b_out,
-    output logic [2*WIDTH-1:0]    acc_out
+    input  wire                 clk,
+    input  wire                 rst_n,
+    input  wire  [WIDTH-1:0]    a_in,
+    input  wire  [WIDTH-1:0]    b_in,
+    output logic [WIDTH-1:0]    a_out,
+    output logic [WIDTH-1:0]    b_out,
+    output logic [2*WIDTH-1:0]  acc_out
 );
 
     // Synchronous Pipeline & Accumulation Logic

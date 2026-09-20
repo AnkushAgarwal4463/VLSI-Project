@@ -1,123 +1,48 @@
-#!/usr/bin/env python3
-import os
-import subprocess
-from concurrent.futures import ProcessPoolExecutor, as_completed
+name: OpenROAD Parameter Sweep Matrix
 
-# ==============================================================================
-# CONFIGURATION & PARAMETER SWEEP MATRIX
-# ==============================================================================
-DESIGN_NAME = "systolic_array"
-PLATFORM    = "nangate45"
-PLACE_SITE  = "FreePDK45_38x28_100_500"  # Crucial fix for Nangate45 LEF site mismatch
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
 
-# Parameter sweep configurations (Adjust or expand to match your exact 72 combinations)
-ARRAY_SIZES   = [4, 8, 16]               # e.g., 3 values
-BIT_WIDTHS    = [8, 16]                  # e.g., 2 values
-UTILIZATIONS  = [20, 30, 40, 50, 60, 70] # e.g., 6 values
-CLOCK_PERIODS = [2.0, 5.0]               # e.g., 2 values
-# Total runs: 3 * 2 * 6 * 2 = 72 runs
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    container:
+      image: openroad/flow-scripts:latest
+      
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        array_size: [4, 8, 16]
+        width: [8, 16]
+        utilization: [20, 30, 40, 50, 60, 70]
+        clock: [2.0, 5.0]
 
-MAX_PARALLEL_JOBS = 16                   # Adjust based on your server's available CPU cores / RAM
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-RUNS_DIR = os.path.abspath("runs")
+      - name: Run OpenROAD Flow
+        run: |
+          RUN_ID="a${{ matrix.array_size }}_w${{ matrix.width }}_u${{ matrix.utilization }}_c${{ matrix.clock }}"
+          RUN_DIR="runs/${RUN_ID}"
+          mkdir -p ${RUN_DIR}
 
-# ==============================================================================
-# WORKER FUNCTION FOR A SINGLE RUN
-# ==============================================================================
-def execute_run(run_config):
-    array_size, bit_width, util, clock_period = run_config
-    run_id = f"a{array_size}_w{bit_width}_u{util}_c{int(clock_period)}"
-    work_dir = os.path.join(RUNS_DIR, run_id)
-    os.makedirs(work_dir, exist_ok=True)
+          # Execute ORFS with explicit environment parameters and site fix
+          make \
+            DESIGN_CONFIG=config.mk \
+            WORK_DIR=${RUN_DIR} \
+            PLACE_SITE="FreePDK45_38x28_100_500" \
+            CORE_UTILIZATION=${{ matrix.utilization }} \
+            CLOCK_PERIOD=${{ matrix.clock }} \
+            VERILOG_INCLUDE_DIRS="." \
+            VERILOG_DEFINES="ARRAY_SIZE=${{ matrix.array_size }} DATA_WIDTH=${{ matrix.width }}"
 
-    # 1. Write run-specific config.mk
-    config_mk_path = os.path.join(work_dir, "config.mk")
-    config_content = f"""# Auto-generated config for run {run_id}
-export DESIGN_NAME      = {DESIGN_NAME}
-export PLATFORM         = {PLATFORM}
-export PLACE_SITE       = {PLACE_SITE}
-
-# Floorplan & Constraints
-export CORE_UTILIZATION  = {util}
-export CORE_ASPECT_RATIO = 1.0
-export CLOCK_PERIOD      = {clock_period}
-
-# Custom design parameters (passed to synthesis if used)
-export ARRAY_SIZE       = {array_size}
-export DATA_WIDTH       = {bit_width}
-"""
-    with open(config_mk_path, "w") as f:
-        f.write(config_content)
-
-    # 2. Inherit environment and inject variables
-    env = os.environ.copy()
-    env["DESIGN_CONFIG"] = config_mk_path
-    env["WORK_DIR"]      = work_dir
-    env["PLACE_SITE"]    = PLACE_SITE
-    env["CORE_UTILIZATION"] = str(util)
-
-    log_file_path = os.path.join(work_dir, "run.log")
-
-    # 3. Execute OpenROAD / ORFS
-    # Adjust target command if running a custom flow (e.g., ["make", "finish"])
-    cmd = ["make", "DESIGN_CONFIG=" + config_mk_path]
-
-    try:
-        with open(log_file_path, "w") as log_file:
-            process = subprocess.run(
-                cmd,
-                env=env,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                text=True,
-                check=True
-            )
-        return (run_id, True, "SUCCESS")
-    except subprocess.CalledProcessError as e:
-        return (run_id, False, f"FAILED (Exit Code {e.returncode}). See log: {log_file_path}")
-    except Exception as e:
-        return (run_id, False, str(e))
-
-# ==============================================================================
-# MAIN PARALLEL DISPATCHER
-# ==============================================================================
-def main():
-    os.makedirs(RUNS_DIR, exist_ok=True)
-
-    # Generate all 72 combinations
-    sweep_matrix = [
-        (a, w, u, c)
-        for a in ARRAY_SIZES
-        for w in BIT_WIDTHS
-        for u in UTILIZATIONS
-        for c in CLOCK_PERIODS
-    ]
-
-    print(f"==================================================")
-    print(f" Starting Parallel Sweep: {len(sweep_matrix)} runs")
-    print(f" Max Parallel Workers : {MAX_PARALLEL_JOBS}")
-    print(f" Target Site Name     : {PLACE_SITE}")
-    print(f"==================================================\n")
-
-    passed = 0
-    failed = 0
-
-    with ProcessPoolExecutor(max_workers=MAX_PARALLEL_JOBS) as executor:
-        future_to_run = {executor.submit(execute_run, cfg): cfg for cfg in sweep_matrix}
-
-        for future in as_completed(future_to_run):
-            run_id, success, msg = future.result()
-            if success:
-                passed += 1
-                print(f"[✓ PASS] {run_id}")
-            else:
-                failed += 1
-                print(f"[✗ FAIL] {run_id} -> {msg}")
-
-    print(f"\n==================================================")
-    print(f" Sweep Finished: {passed} PASSED | {failed} FAILED out of {len(sweep_matrix)} total runs.")
-    print(f" Results directory: {RUNS_DIR}")
-    print(f"==================================================")
-
-if __name__ == "__main__":
-    main()
+      - name: Upload Logs & Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: result-a${{ matrix.array_size }}-w${{ matrix.width }}-u${{ matrix.utilization }}-c${{ matrix.clock }}
+          path: runs/a${{ matrix.array_size }}_w${{ matrix.width }}_u${{ matrix.utilization }}_c${{ matrix.clock }}/

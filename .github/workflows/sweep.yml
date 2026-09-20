@@ -1,128 +1,123 @@
-name: Systolic Array Matrix Optimization Sweep
+#!/usr/bin/env python3
+import os
+import subprocess
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
-on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
+# ==============================================================================
+# CONFIGURATION & PARAMETER SWEEP MATRIX
+# ==============================================================================
+DESIGN_NAME = "systolic_array"
+PLATFORM    = "nangate45"
+PLACE_SITE  = "FreePDK45_38x28_100_500"  # Crucial fix for Nangate45 LEF site mismatch
 
-jobs:
-  run-matrix:
-    runs-on: ubuntu-latest
-    container:
-      image: openroad/orfs:latest
+# Parameter sweep configurations (Adjust or expand to match your exact 72 combinations)
+ARRAY_SIZES   = [4, 8, 16]               # e.g., 3 values
+BIT_WIDTHS    = [8, 16]                  # e.g., 2 values
+UTILIZATIONS  = [20, 30, 40, 50, 60, 70] # e.g., 6 values
+CLOCK_PERIODS = [2.0, 5.0]               # e.g., 2 values
+# Total runs: 3 * 2 * 6 * 2 = 72 runs
 
-    defaults:
-      run:
-        shell: bash
+MAX_PARALLEL_JOBS = 16                   # Adjust based on your server's available CPU cores / RAM
 
-    strategy:
-      fail-fast: false
-      matrix:
-        array_size: [4, 8, 16]
-        data_width: [8, 16]
-        util: [30, 50, 70]
-        clk_period: [5, 10, 15, 20]
+RUNS_DIR = os.path.abspath("runs")
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+# ==============================================================================
+# WORKER FUNCTION FOR A SINGLE RUN
+# ==============================================================================
+def execute_run(run_config):
+    array_size, bit_width, util, clock_period = run_config
+    run_id = f"a{array_size}_w{bit_width}_u{util}_c{int(clock_period)}"
+    work_dir = os.path.join(RUNS_DIR, run_id)
+    os.makedirs(work_dir, exist_ok=True)
 
-      - name: Locate PDK & Execute Matrix Run
-        env:
-          ARRAY_SIZE: ${{ matrix.array_size }}
-          DATA_WIDTH: ${{ matrix.data_width }}
-          UTIL: ${{ matrix.util }}
-          CLK_PERIOD: ${{ matrix.clk_period }}
-          RUN_TAG: "a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}"
-          RUN_DIR: "systolic_project/runs/a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}"
-          SDC_FILE: "systolic_project/runs/a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}/constraint.sdc"
-          PATH: /OpenROAD-flow-scripts/tools/install/OpenROAD/bin:/OpenROAD-flow-scripts/tools/install/yosys/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
-          PYTHONPATH: /OpenROAD-flow-scripts/tools/install/OpenROAD/lib/python:$PYTHONPATH
-        run: |
-          set -e
+    # 1. Write run-specific config.mk
+    config_mk_path = os.path.join(work_dir, "config.mk")
+    config_content = f"""# Auto-generated config for run {run_id}
+export DESIGN_NAME      = {DESIGN_NAME}
+export PLATFORM         = {PLATFORM}
+export PLACE_SITE       = {PLACE_SITE}
 
-          echo "=== Dynamic PDK Resolution ==="
-          export LIB_FILE=$(find / -iname "NangateOpenCellLibrary_typical.lib" 2>/dev/null | head -n 1)
-          export TECH_LEF_FILE=$(find / -iname "*tech*.lef" 2>/dev/null | grep -i nangate | head -n 1)
-          export CELL_LEF_FILE=$(find / -iname "NangateOpenCellLibrary.macro.lef" 2>/dev/null || find / -iname "NangateOpenCellLibrary.lef" 2>/dev/null | head -n 1)
+# Floorplan & Constraints
+export CORE_UTILIZATION  = {util}
+export CORE_ASPECT_RATIO = 1.0
+export CLOCK_PERIOD      = {clock_period}
 
-          if [ -z "$LIB_FILE" ]; then
-            echo "ERROR: Nangate45 Liberty file not found in container!"
-            exit 1
-          fi
+# Custom design parameters (passed to synthesis if used)
+export ARRAY_SIZE       = {array_size}
+export DATA_WIDTH       = {bit_width}
+"""
+    with open(config_mk_path, "w") as f:
+        f.write(config_content)
 
-          echo "PDK LIB  : $LIB_FILE"
-          echo "PDK TECH : $TECH_LEF_FILE"
-          echo "PDK CELL : $CELL_LEF_FILE"
+    # 2. Inherit environment and inject variables
+    env = os.environ.copy()
+    env["DESIGN_CONFIG"] = config_mk_path
+    env["WORK_DIR"]      = work_dir
+    env["PLACE_SITE"]    = PLACE_SITE
+    env["CORE_UTILIZATION"] = str(util)
 
-          mkdir -p "${RUN_DIR}"
-          mkdir -p "systolic_project/synth"
+    log_file_path = os.path.join(work_dir, "run.log")
 
-          # 1. Substitute dynamic parameters and PDK paths into Yosys script
-          sed -e "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" \
-              -e "s/__DATA_WIDTH__/${DATA_WIDTH}/g" \
-              -e "s|__LIB_FILE__|${LIB_FILE}|g" \
-              scripts/synth.ys > "${RUN_DIR}/synth_gen.ys"
+    # 3. Execute OpenROAD / ORFS
+    # Adjust target command if running a custom flow (e.g., ["make", "finish"])
+    cmd = ["make", "DESIGN_CONFIG=" + config_mk_path]
 
-          # 2. Generate SDC constraints compatible with OpenROAD SDC parser
-          echo "create_clock -name clk -period ${CLK_PERIOD} [get_ports clk]" > "${SDC_FILE}"
-          echo "set_input_delay 0.1 -clock clk [all_inputs]" >> "${SDC_FILE}"
-          echo "set_output_delay 0.1 -clock clk [all_outputs]" >> "${SDC_FILE}"
+    try:
+        with open(log_file_path, "w") as log_file:
+            process = subprocess.run(
+                cmd,
+                env=env,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                text=True,
+                check=True
+            )
+        return (run_id, True, "SUCCESS")
+    except subprocess.CalledProcessError as e:
+        return (run_id, False, f"FAILED (Exit Code {e.returncode}). See log: {log_file_path}")
+    except Exception as e:
+        return (run_id, False, str(e))
 
-          echo "=== Starting Yosys Synthesis ==="
-          yosys -s "${RUN_DIR}/synth_gen.ys" 2>&1 | tee "${RUN_DIR}/yosys.log"
+# ==============================================================================
+# MAIN PARALLEL DISPATCHER
+# ==============================================================================
+def main():
+    os.makedirs(RUNS_DIR, exist_ok=True)
 
-          echo "=== Starting OpenROAD Place & Route ==="
-          openroad -exit scripts/flow.tcl 2>&1 | tee "${RUN_DIR}/openroad.log"
+    # Generate all 72 combinations
+    sweep_matrix = [
+        (a, w, u, c)
+        for a in ARRAY_SIZES
+        for w in BIT_WIDTHS
+        for u in UTILIZATIONS
+        for c in CLOCK_PERIODS
+    ]
 
-          echo "=== Extracting Features ==="
-          python3 scripts/extract_features.py
+    print(f"==================================================")
+    print(f" Starting Parallel Sweep: {len(sweep_matrix)} runs")
+    print(f" Max Parallel Workers : {MAX_PARALLEL_JOBS}")
+    print(f" Target Site Name     : {PLACE_SITE}")
+    print(f"==================================================\n")
 
-      - name: Upload Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: failure-logs-${{ matrix.array_size }}-${{ matrix.data_width }}-${{ matrix.util }}-${{ matrix.clk_period }}
-          path: |
-            systolic_project/runs/*/*.log
-            systolic_project/runs/*/synth_gen.ys
-            systolic_project/runs/*/constraint.sdc
+    passed = 0
+    failed = 0
 
-      - name: Upload Run Feature JSON
-        uses: actions/upload-artifact@v4
-        with:
-          name: features-${{ matrix.array_size }}-${{ matrix.data_width }}-${{ matrix.util }}-${{ matrix.clk_period }}
-          path: systolic_project/runs/*/*_features.json
+    with ProcessPoolExecutor(max_workers=MAX_PARALLEL_JOBS) as executor:
+        future_to_run = {executor.submit(execute_run, cfg): cfg for cfg in sweep_matrix}
 
-  aggregate-results:
-    needs: run-matrix
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+        for future in as_completed(future_to_run):
+            run_id, success, msg = future.result()
+            if success:
+                passed += 1
+                print(f"[✓ PASS] {run_id}")
+            else:
+                failed += 1
+                print(f"[✗ FAIL] {run_id} -> {msg}")
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+    print(f"\n==================================================")
+    print(f" Sweep Finished: {passed} PASSED | {failed} FAILED out of {len(sweep_matrix)} total runs.")
+    print(f" Results directory: {RUNS_DIR}")
+    print(f"==================================================")
 
-      - name: Install Dependencies
-        run: pip install pandas
-
-      - name: Download All Feature Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: systolic_project/runs
-          pattern: features-*
-          merge-multiple: true
-
-      - name: Aggregate Dataset into CSV
-        run: |
-          mkdir -p dataset
-          python3 scripts/aggregate_dataset.py
-
-      - name: Upload Final Aggregated Dataset CSV
-        uses: actions/upload-artifact@v4
-        with:
-          name: placement_dataset_real.csv
-          path: dataset/placement_dataset_real.csv
+if __name__ == "__main__":
+    main()

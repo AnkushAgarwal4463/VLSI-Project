@@ -1,81 +1,74 @@
-name: OpenROAD 72-Run Matrix Optimization Pipeline
+name: Systolic Array Matrix Optimization Sweep
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   run-matrix:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      max-parallel: 12
       matrix:
         array_size: [4, 8, 16]
         data_width: [8, 16]
         util: [30, 50, 70]
-        clk: [5.0, 10.0, 15.0, 20.0]
+        clk_period: [5, 10, 15, 20]
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Conda Environment & OpenROAD
-        uses: conda-incubator/setup-miniconda@v3
+      # Set up Python directly without looking for environment.yml
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          auto-update-conda: true
-          python-version: "3.10"
-          activate-environment: test
-          environment-file: environment.yml
+          python-version: '3.10'
 
-      - name: Inject Parameters & Execute Synthesis (Yosys)
-        shell: bash -l {0}
-        env:
-          ARRAY_SIZE: "${{ matrix.array_size }}"
-          DATA_WIDTH: "${{ matrix.data_width }}"
+      - name: Install Python Dependencies
         run: |
-          # Replace placeholder parameter values in synth.ys dynamically
-          sed -i "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" scripts/synth.ys
-          sed -i "s/__DATA_WIDTH__/${DATA_WIDTH}/g" scripts/synth.ys
-          
-          # Run Yosys RTL Synthesis
-          yosys -s scripts/synth.ys
+          python -m pip install --upgrade pip
+          pip install pandas
 
-      - name: Execute Physical Design Flow (OpenROAD)
-        shell: bash -l {0}
-        env:
-          RUN_TAG: "run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}"
-          ARRAY_SIZE: "${{ matrix.array_size }}"
-          DATA_WIDTH: "${{ matrix.data_width }}"
-          UTIL: "${{ matrix.util }}"
-          CLK_PERIOD: "${{ matrix.clk }}"
+      # Install Yosys and OpenROAD on the runner
+      - name: Install OpenROAD & Yosys
         run: |
-          mkdir -p systolic_project/runs/$RUN_TAG
-          
-          # Update clock target dynamically in constraints.sdc
-          sed -i "s/-period [0-9.]*/-period ${CLK_PERIOD}/g" constraints.sdc
+          sudo apt-get update
+          sudo apt-get install -y yosys openroad
 
-          # Run OpenROAD Place & Route flow
-          openroad -exit scripts/flow.tcl > systolic_project/runs/$RUN_TAG/openroad.log 2>&1 || true
-
-      - name: Extract Matrix Features
-        shell: bash -l {0}
+      - name: Execute Matrix Run
         env:
-          RUN_DIR: "systolic_project/runs/run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}"
-          RUN_TAG: "run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}"
-          ARRAY_SIZE: "${{ matrix.array_size }}"
-          DATA_WIDTH: "${{ matrix.data_width }}"
-          UTIL: "${{ matrix.util }}"
-          CLK_PERIOD: "${{ matrix.clk }}"
+          ARRAY_SIZE: ${{ matrix.array_size }}
+          DATA_WIDTH: ${{ matrix.data_width }}
+          UTIL: ${{ matrix.util }}
+          CLK_PERIOD: ${{ matrix.clk_period }}
+          RUN_TAG: "a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}"
         run: |
+          RUN_DIR="systolic_project/runs/${RUN_TAG}"
+          mkdir -p "${RUN_DIR}"
+          echo "RUN_DIR=${RUN_DIR}" >> $GITHUB_ENV
+
+          # Substitute dynamic parameters into Yosys script
+          sed -e "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" \
+              -e "s/__DATA_WIDTH__/${DATA_WIDTH}/g" \
+              scripts/synth.ys > "${RUN_DIR}/synth_gen.ys"
+
+          # 1. Synthesize
+          yosys -s "${RUN_DIR}/synth_gen.ys" > "${RUN_DIR}/yosys.log" 2>&1
+
+          # 2. Place & Route
+          openroad -exit scripts/flow.tcl > "${RUN_DIR}/openroad.log" 2>&1
+
+          # 3. Extract Features
           python3 scripts/extract_features.py
 
-      - name: Upload Single Run Artifact
+      # Upload individual run JSON artifacts
+      - name: Upload Run Feature JSON
         uses: actions/upload-artifact@v4
         with:
-          name: features-run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}
-          path: systolic_project/runs/run_a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk }}/*_features.json
+          name: features-${{ matrix.array_size }}-${{ matrix.data_width }}-${{ matrix.util }}-${{ matrix.clk_period }}
+          path: systolic_project/runs/*/*_features.json
 
   aggregate-results:
     needs: run-matrix
@@ -87,26 +80,23 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: '3.10'
 
       - name: Install Dependencies
-        run: |
-          pip install pandas
+        run: pip install pandas
 
-      - name: Download All Matrix Run Artifacts
+      - name: Download All Feature Artifacts
         uses: actions/download-artifact@v4
         with:
           path: systolic_project/runs
           pattern: features-*
           merge-multiple: true
 
-      - name: Aggregate CSV Dataset
-        run: |
-          mkdir -p dataset
-          python3 scripts/aggregate_dataset.py
+      - name: Aggregate Dataset into CSV
+        run: python3 scripts/aggregate_dataset.py
 
-      - name: Upload Aggregated Dataset
+      - name: Upload Final Aggregated Dataset CSV
         uses: actions/upload-artifact@v4
         with:
-          name: placement_dataset_real
+          name: placement_dataset_real.csv
           path: dataset/placement_dataset_real.csv

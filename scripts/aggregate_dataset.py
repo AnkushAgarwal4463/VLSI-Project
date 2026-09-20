@@ -11,8 +11,8 @@ def aggregate_dataset():
     records = []
 
     if runs_dir.exists():
-        # Glob recursively to catch both nested and flattened artifact downloads
-        json_files = list(runs_dir.rglob("*_features.json"))
+        # Glob recursively for ALL json files regardless of exact filename pattern
+        json_files = list(runs_dir.rglob("*.json"))
         print(f"[Info] Found {len(json_files)} feature JSON files in {runs_dir}")
 
         for file_path in json_files:
@@ -31,6 +31,8 @@ def aggregate_dataset():
 
                     if isinstance(data, dict) and "error" not in data:
                         records.append(data)
+                    elif isinstance(data, list):
+                        records.extend(data)
 
             except Exception as e:
                 print(f"[Warning] Failed to parse {file_path}: {e}")

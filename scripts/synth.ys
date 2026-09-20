@@ -1,18 +1,27 @@
-# Parse SystemVerilog files with -sv flag
+# Parse SystemVerilog files
 read_verilog -sv rtl/pe.v
 read_verilog -sv rtl/systolic_array.v
 
-# Elaborate top module and override parameters cleanly
+# Elaborate top module and override parameters
 hierarchy -top systolic_array -chparam N __ARRAY_SIZE__ -chparam WIDTH __DATA_WIDTH__
 
-# High-level synthesis / optimization passes
+# High-level synthesis & optimization
 proc
 flatten
 opt
 fsm
 opt
+memory
+opt
 techmap
 opt
 
-# Write out gate-level netlist
-write_verilog -noattr -noexpr -nohex -nodec systolic_project/synth/systolic_netlist.v
+# Standard cell mapping using container Liberty file
+dfflibmap -liberty $env(LIB_FILE)
+abc -liberty $env(LIB_FILE)
+opt
+clean
+
+# Output gate-level netlist and area stats
+write_verilog -noattr systolic_project/synth/systolic_netlist.v
+stat -liberty $env(LIB_FILE)

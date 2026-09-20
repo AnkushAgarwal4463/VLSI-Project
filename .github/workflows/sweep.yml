@@ -11,6 +11,10 @@ jobs:
     container:
       image: openroad/orfs:latest
 
+    defaults:
+      run:
+        shell: bash
+
     strategy:
       fail-fast: false
       matrix:
@@ -23,11 +27,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Python Dependencies
-        run: |
-          apt-get update
-          apt-get install -y python3-pandas python3-pip
-
       - name: Execute Matrix Run
         env:
           ARRAY_SIZE: ${{ matrix.array_size }}
@@ -35,7 +34,7 @@ jobs:
           UTIL: ${{ matrix.util }}
           CLK_PERIOD: ${{ matrix.clk_period }}
           RUN_TAG: "a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}"
-          PATH: /OpenROAD-flow-scripts/tools/install/OpenROAD/bin:/OpenROAD-flow-scripts/tools/install/yosys/bin:$PATH
+          PATH: /OpenROAD-flow-scripts/tools/install/OpenROAD/bin:/OpenROAD-flow-scripts/tools/install/yosys/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
           PYTHONPATH: /OpenROAD-flow-scripts/tools/install/OpenROAD/lib/python:$PYTHONPATH
         run: |
           set -e

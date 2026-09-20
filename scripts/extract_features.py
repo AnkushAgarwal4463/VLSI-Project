@@ -44,6 +44,9 @@ def extract(run_dir, run_tag, util, clk_period, array_size, data_width):
     insts = block.getInsts()
     total_cells = len(insts)
 
+    dbu = block.getDbUnitsPerMicron()
+    dbu_area_factor = float(dbu * dbu) if dbu else 1.0
+
     xs, ys, areas = [], [], []
     ff_count, buf_count, high_drive_count = 0, 0, 0
     for inst in insts:
@@ -72,9 +75,14 @@ def extract(run_dir, run_tag, util, clk_period, array_size, data_width):
     max_fanout = float(max(fanouts)) if fanouts else 0.0
 
     core = block.getCoreArea()
-    core_area = max((core.xMax() - core.xMin()) * (core.yMax() - core.yMin()), 1)
-    total_cell_area = float(sum(areas))
-    mean_density = 100.0 * total_cell_area / core_area
+    core_area_dbu = max((core.xMax() - core.xMin()) * (core.yMax() - core.yMin()), 1)
+    total_cell_area_dbu = float(sum(areas))
+    
+    # Area conversion to um^2 for normalized feature output
+    core_area = core_area_dbu / dbu_area_factor
+    total_cell_area = total_cell_area_dbu / dbu_area_factor
+
+    mean_density = 100.0 * total_cell_area_dbu / core_area_dbu
     pin_density = float(len(block.getBTerms())) / core_area
 
     # Spatial density grid (8x8 tile matrix)
@@ -101,20 +109,21 @@ def extract(run_dir, run_tag, util, clk_period, array_size, data_width):
     max_density = max(tile_density) if tile_density else 0.0
     std_density = std_dev(tile_density)
 
-    # Parsing Congestion Reports
+    # Robust Congestion Report Parsing
     max_overflow, mean_overflow, overflow_tiles = 0.0, 0.0, 0
     congestion_file = run_path / "congestion.rpt"
     if congestion_file.exists():
+        overflows = []
         with open(congestion_file, "r") as f:
-            overflows = [
-                float(m.group(1))
-                for line in f
-                if (m := re.search(r"overflow[:\s]+([0-9.]+)", line, re.IGNORECASE))
-            ]
-            if overflows:
-                max_overflow = max(overflows)
-                mean_overflow = sum(overflows) / len(overflows)
-                overflow_tiles = sum(1 for o in overflows if o > 0)
+            for line in f:
+                if m := re.search(r"overflow[:\s]+([0-9.]+)", line, re.IGNORECASE):
+                    overflows.append(float(m.group(1)))
+                elif m := re.search(r"^\s*\S+\s+\d+\s+\d+\s+(\d+)", line):
+                    overflows.append(float(m.group(1)))
+        if overflows:
+            max_overflow = max(overflows)
+            mean_overflow = sum(overflows) / len(overflows)
+            overflow_tiles = sum(1 for o in overflows if o > 0)
 
     # Parsing Log File Timing (WNS/TNS)
     wns, tns, num_viol = 0.0, 0.0, 0
@@ -123,10 +132,10 @@ def extract(run_dir, run_tag, util, clk_period, array_size, data_width):
     if log_file.exists():
         log_text = log_file.read_text(encoding="utf-8", errors="ignore")
         wns_matches = re.findall(
-            r"(?:worst slack|wns)[:\s]+(-?[0-9.]+)", log_text, re.IGNORECASE
+            r"(?:worst\s+slack|wns|slack\s+\(VIOLATED\))[:\s]+(-?[0-9.]+)", log_text, re.IGNORECASE
         )
         tns_matches = re.findall(
-            r"tns[:\s]+(-?[0-9.]+)", log_text, re.IGNORECASE
+            r"(?:tns|total\s+negative\s+slack)[:\s]+(-?[0-9.]+)", log_text, re.IGNORECASE
         )
         if wns_matches:
             wns = float(wns_matches[-1])
@@ -148,8 +157,8 @@ def extract(run_dir, run_tag, util, clk_period, array_size, data_width):
         "max_fanout": max_fanout,
         "x_spread": x_spread,
         "y_spread": y_spread,
-        "total_cell_area": total_cell_area,
-        "core_area": core_area,
+        "total_cell_area_um2": total_cell_area,
+        "core_area_um2": core_area,
         "max_overflow": max_overflow,
         "mean_overflow": mean_overflow,
         "overflow_tile_count": overflow_tiles,

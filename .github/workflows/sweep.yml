@@ -8,9 +8,8 @@ on:
 jobs:
   run-matrix:
     runs-on: ubuntu-latest
-    # Run directly inside the official OpenROAD container where all EDA tools exist natively
     container:
-      image: openroad/ubuntu22.04-builder:latest
+      image: openroad/orfs:latest
 
     strategy:
       fail-fast: false
@@ -24,11 +23,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Install pandas inside the container for feature extraction
-      - name: Install Python Dependencies
+      - name: Install Dependencies
         run: |
-          python3 -m pip install --upgrade pip || apt-get update && apt-get install -y python3-pip python3-pandas
-          pip3 install pandas || true
+          apt-get update
+          apt-get install -y python3-pandas python3-pip
 
       - name: Execute Matrix Run
         env:

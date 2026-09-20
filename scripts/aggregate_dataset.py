@@ -1,61 +1,60 @@
+import os
+import glob
 import json
-from pathlib import Path
 import pandas as pd
 
+def aggregate_features(runs_dir="systolic_project/runs", output_csv="dataset/placement_dataset_real.csv"):
+    """Find all JSON feature files and aggregate them into a master CSV dataset."""
+    search_pattern = os.path.join(runs_dir, "**", "*_features.json")
+    json_files = glob.glob(search_pattern, recursive=True)
 
-def aggregate_dataset():
-    runs_dir = Path("systolic_project/runs")
-    out_dir = Path("dataset")
-    out_csv = out_dir / "placement_dataset_real.csv"
+    if not json_files:
+        print(f"No feature JSON files found matching pattern: {search_pattern}")
+        return
 
     records = []
+    for file_path in json_files:
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+                records.append(data)
+        except Exception as e:
+            print(f"Error reading {file_path}: {e}")
 
-    if runs_dir.exists():
-        # Glob recursively for ALL json files regardless of exact filename pattern
-        json_files = list(runs_dir.rglob("*.json"))
-        print(f"[Info] Found {len(json_files)} feature JSON files in {runs_dir}")
+    df = pd.DataFrame(records)
 
-        for file_path in json_files:
-            try:
-                text = file_path.read_text(encoding="utf-8").strip()
-                if not text:
-                    continue
+    # Define exact priority column order
+    priority_cols = [
+        "run_tag",
+        "array_size",
+        "data_width",
+        "utilization",
+        "clk_period_ns",
+        "wirelength_u",
+        "total_gate_area",
+        "slack_ps",
+        "total_power_mw",
+        "routing_congested_nets"
+    ]
 
-                # Locate raw JSON boundaries to strip out any stray console logging
-                start_idx = text.find("{")
-                end_idx = text.rfind("}")
+    # Reorder columns that exist and append any extra columns found
+    existing_priority_cols = [col for col in priority_cols if col in df.columns]
+    other_cols = [col for col in df.columns if col not in priority_cols]
+    final_cols = existing_priority_cols + other_cols
 
-                if start_idx != -1 and end_idx != -1:
-                    clean_json = text[start_idx : end_idx + 1]
-                    data = json.loads(clean_json)
+    df = df[final_cols]
 
-                    if isinstance(data, dict) and "error" not in data:
-                        records.append(data)
-                    elif isinstance(data, list):
-                        records.extend(data)
+    # Sort dataset by array size, data width, utilization, and clock period
+    sort_keys = [c for c in ["array_size", "data_width", "utilization", "clk_period_ns"] if c in df.columns]
+    if sort_keys:
+        df = df.sort_values(by=sort_keys).reset_index(drop=True)
 
-            except Exception as e:
-                print(f"[Warning] Failed to parse {file_path}: {e}")
-
-    if records:
-        df = pd.DataFrame(records)
-
-        # Deduplicate runs based on run_tag if available
-        if "run_tag" in df.columns:
-            df = df.drop_duplicates(subset=["run_tag"])
-
-        # Prioritize key matrix features on the left side of the CSV
-        priority_cols = ["run_tag", "array_size", "data_width", "util", "clk_period"]
-        existing_priority = [c for c in priority_cols if c in df.columns]
-        other_cols = [c for c in df.columns if c not in existing_priority]
-        df = df[existing_priority + sorted(other_cols)]
-
-        out_dir.mkdir(parents=True, exist_ok=True)
-        df.to_csv(out_csv, index=False)
-        print(f"[Success] Aggregated {len(df)} samples saved to {out_csv}")
-    else:
-        print("[Error] No valid feature JSON files were found to aggregate.")
-
+    # Create destination output directory if missing
+    os.makedirs(os.path.dirname(output_csv), exist_ok=True)
+    
+    # Save aggregated output CSV
+    df.to_csv(output_csv, index=False)
+    print(f"Successfully aggregated {len(records)} run outputs into {output_csv}")
 
 if __name__ == "__main__":
-    aggregate_dataset()
+    aggregate_features()

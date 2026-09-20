@@ -64,12 +64,10 @@ jobs:
               -e "s|__LIB_FILE__|${LIB_FILE}|g" \
               scripts/synth.ys > "${RUN_DIR}/synth_gen.ys"
 
-          # 2. Dynamically generate SDC constraints matching the run's CLK_PERIOD
-          cat << 'EOF' > "${SDC_FILE}"
-create_clock -name clk -period ${CLK_PERIOD} [get_ports clk]
-set_input_delay 0.1 -clock clk [all_inputs]
-set_output_delay 0.1 -clock clk [all_outputs]
-EOF
+          # 2. Safely generate SDC constraints without relying on multiline heredocs
+          echo "create_clock -name clk -period ${CLK_PERIOD} [get_ports clk]" > "${SDC_FILE}"
+          echo "set_input_delay 0.1 -clock clk [all_inputs]" >> "${SDC_FILE}"
+          echo "set_output_delay 0.1 -clock clk [all_outputs]" >> "${SDC_FILE}"
 
           echo "=== Starting Yosys Synthesis ==="
           yosys -s "${RUN_DIR}/synth_gen.ys" 2>&1 | tee "${RUN_DIR}/yosys.log"

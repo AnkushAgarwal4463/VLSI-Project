@@ -1,4 +1,4 @@
-name: OpenROAD Parameter Sweep Matrix
+name: Systolic Array Matrix Optimization Sweep
 
 on:
   push:
@@ -6,43 +6,123 @@ on:
   workflow_dispatch:
 
 jobs:
-  sweep:
+  run-matrix:
     runs-on: ubuntu-latest
     container:
-      image: openroad/flow-scripts:latest
-      
+      image: openroad/orfs:latest
+
+    defaults:
+      run:
+        shell: bash
+
     strategy:
       fail-fast: false
-      max-parallel: 16
       matrix:
         array_size: [4, 8, 16]
-        width: [8, 16]
-        utilization: [20, 30, 40, 50, 60, 70]
-        clock: [2.0, 5.0]
+        data_width: [8, 16]
+        util: [30, 50, 70]
+        clk_period: [5, 10, 15, 20]
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Run OpenROAD Flow
+      - name: Locate PDK & Execute Matrix Run
+        env:
+          ARRAY_SIZE: ${{ matrix.array_size }}
+          DATA_WIDTH: ${{ matrix.data_width }}
+          UTIL: ${{ matrix.util }}
+          CLK_PERIOD: ${{ matrix.clk_period }}
+          RUN_TAG: "a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}"
+          RUN_DIR: "systolic_project/runs/a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}"
+          SDC_FILE: "systolic_project/runs/a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}/constraint.sdc"
+          PATH: /OpenROAD-flow-scripts/tools/install/OpenROAD/bin:/OpenROAD-flow-scripts/tools/install/yosys/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+          PYTHONPATH: /OpenROAD-flow-scripts/tools/install/OpenROAD/lib/python:$PYTHONPATH
         run: |
-          RUN_ID="a${{ matrix.array_size }}_w${{ matrix.width }}_u${{ matrix.utilization }}_c${{ matrix.clock }}"
-          RUN_DIR="runs/${RUN_ID}"
-          mkdir -p ${RUN_DIR}
+          set -e
 
-          # Execute ORFS with explicit environment parameters and site fix
-          make \
-            DESIGN_CONFIG=config.mk \
-            WORK_DIR=${RUN_DIR} \
-            PLACE_SITE="FreePDK45_38x28_100_500" \
-            CORE_UTILIZATION=${{ matrix.utilization }} \
-            CLOCK_PERIOD=${{ matrix.clock }} \
-            VERILOG_INCLUDE_DIRS="." \
-            VERILOG_DEFINES="ARRAY_SIZE=${{ matrix.array_size }} DATA_WIDTH=${{ matrix.width }}"
+          echo "=== Dynamic PDK Resolution ==="
+          export LIB_FILE=$(find / -iname "NangateOpenCellLibrary_typical.lib" 2>/dev/null | head -n 1)
+          export TECH_LEF_FILE=$(find / -iname "*tech*.lef" 2>/dev/null | grep -i nangate | head -n 1)
+          export CELL_LEF_FILE=$(find / -iname "NangateOpenCellLibrary.macro.lef" 2>/dev/null || find / -iname "NangateOpenCellLibrary.lef" 2>/dev/null | head -n 1)
 
-      - name: Upload Logs & Artifacts
-        if: always()
+          if [ -z "$LIB_FILE" ]; then
+            echo "ERROR: Nangate45 Liberty file not found in container!"
+            exit 1
+          fi
+
+          echo "PDK LIB  : $LIB_FILE"
+          echo "PDK TECH : $TECH_LEF_FILE"
+          echo "PDK CELL : $CELL_LEF_FILE"
+
+          mkdir -p "${RUN_DIR}"
+          mkdir -p "systolic_project/synth"
+
+          # 1. Substitute dynamic parameters and PDK paths into Yosys script
+          sed -e "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" \
+              -e "s/__DATA_WIDTH__/${DATA_WIDTH}/g" \
+              -e "s|__LIB_FILE__|${LIB_FILE}|g" \
+              scripts/synth.ys > "${RUN_DIR}/synth_gen.ys"
+
+          # 2. Generate SDC constraints compatible with OpenROAD SDC parser
+          echo "create_clock -name clk -period ${CLK_PERIOD} [get_ports clk]" > "${SDC_FILE}"
+          echo "set_input_delay 0.1 -clock clk [get_ports -filter {name != clk}]" >> "${SDC_FILE}"
+          echo "set_output_delay 0.1 -clock clk [all_outputs]" >> "${SDC_FILE}"
+
+          echo "=== Starting Yosys Synthesis ==="
+          yosys -s "${RUN_DIR}/synth_gen.ys" 2>&1 | tee "${RUN_DIR}/yosys.log"
+
+          echo "=== Starting OpenROAD Place & Route ==="
+          openroad -exit scripts/flow.tcl 2>&1 | tee "${RUN_DIR}/openroad.log"
+
+          echo "=== Extracting Features ==="
+          python3 scripts/extract_features.py
+
+      - name: Upload Logs on Failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: result-a${{ matrix.array_size }}-w${{ matrix.width }}-u${{ matrix.utilization }}-c${{ matrix.clock }}
-          path: runs/a${{ matrix.array_size }}_w${{ matrix.width }}_u${{ matrix.utilization }}_c${{ matrix.clock }}/
+          name: failure-logs-${{ matrix.array_size }}-${{ matrix.data_width }}-${{ matrix.util }}-${{ matrix.clk_period }}
+          path: |
+            systolic_project/runs/*/*.log
+            systolic_project/runs/*/synth_gen.ys
+            systolic_project/runs/*/constraint.sdc
+
+      - name: Upload Run Feature JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: features-${{ matrix.array_size }}-${{ matrix.data_width }}-${{ matrix.util }}-${{ matrix.clk_period }}
+          path: systolic_project/runs/*/*_features.json
+
+  aggregate-results:
+    needs: run-matrix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: pip install pandas
+
+      - name: Download All Feature Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: systolic_project/runs
+          pattern: features-*
+          merge-multiple: true
+
+      - name: Aggregate Dataset into CSV
+        run: |
+          mkdir -p dataset
+          python3 scripts/aggregate_dataset.py
+
+      - name: Upload Final Aggregated Dataset CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: placement_dataset_real.csv
+          path: dataset/placement_dataset_real.csv

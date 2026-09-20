@@ -1,11 +1,11 @@
-# Parse SystemVerilog files
-read_verilog -sv rtl/pe.v
-read_verilog -sv rtl/systolic_array.v
+# Read SystemVerilog files with parameters defined prior to elaboration
+read_verilog -sv -DARRAY_SIZE=__ARRAY_SIZE__ -DDATA_WIDTH=__DATA_WIDTH__ rtl/pe.v
+read_verilog -sv -DARRAY_SIZE=__ARRAY_SIZE__ -DDATA_WIDTH=__DATA_WIDTH__ rtl/systolic_array.v
 
-# Elaborate top module and override parameters
-hierarchy -top systolic_array -chparam N __ARRAY_SIZE__ -chparam WIDTH __DATA_WIDTH__
+# Pure top-level elaboration (no -chparam needed)
+hierarchy -top systolic_array
 
-# High-level synthesis & optimization
+# Standard synthesis & cell mapping
 proc
 flatten
 opt

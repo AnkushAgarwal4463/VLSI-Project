@@ -64,9 +64,9 @@ jobs:
               -e "s|__LIB_FILE__|${LIB_FILE}|g" \
               scripts/synth.ys > "${RUN_DIR}/synth_gen.ys"
 
-          # 2. Safely generate SDC constraints without relying on multiline heredocs
+          # 2. Generate SDC constraints compatible with OpenROAD SDC parser
           echo "create_clock -name clk -period ${CLK_PERIOD} [get_ports clk]" > "${SDC_FILE}"
-          echo "set_input_delay 0.1 -clock clk [remove_from_collection [all_inputs] [get_ports clk]]" >> "${SDC_FILE}"
+          echo "set_input_delay 0.1 -clock clk [get_ports -filter {name != clk}]" >> "${SDC_FILE}"
           echo "set_output_delay 0.1 -clock clk [all_outputs]" >> "${SDC_FILE}"
 
           echo "=== Starting Yosys Synthesis ==="

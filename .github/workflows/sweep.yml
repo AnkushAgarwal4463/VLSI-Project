@@ -23,7 +23,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Install Python Dependencies
         run: |
           apt-get update
           apt-get install -y python3-pandas python3-pip
@@ -36,6 +36,7 @@ jobs:
           CLK_PERIOD: ${{ matrix.clk_period }}
           RUN_TAG: "a${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.util }}_c${{ matrix.clk_period }}"
         run: |
+          set -e
           RUN_DIR="systolic_project/runs/${RUN_TAG}"
           mkdir -p "${RUN_DIR}"
           echo "RUN_DIR=${RUN_DIR}" >> $GITHUB_ENV
@@ -45,14 +46,23 @@ jobs:
               -e "s/__DATA_WIDTH__/${DATA_WIDTH}/g" \
               scripts/synth.ys > "${RUN_DIR}/synth_gen.ys"
 
-          # 1. Synthesize with Yosys
-          yosys -s "${RUN_DIR}/synth_gen.ys" > "${RUN_DIR}/yosys.log" 2>&1
+          echo "=== Starting Yosys Synthesis ==="
+          yosys -s "${RUN_DIR}/synth_gen.ys" | tee "${RUN_DIR}/yosys.log"
 
-          # 2. Place & Route with OpenROAD
-          openroad -exit scripts/flow.tcl > "${RUN_DIR}/openroad.log" 2>&1
+          echo "=== Starting OpenROAD Place & Route ==="
+          openroad -exit scripts/flow.tcl | tee "${RUN_DIR}/openroad.log"
 
-          # 3. Extract Features
+          echo "=== Extracting Features ==="
           python3 scripts/extract_features.py
+
+      - name: Upload Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-logs-${{ matrix.array_size }}-${{ matrix.data_width }}-${{ matrix.util }}-${{ matrix.clk_period }}
+          path: |
+            systolic_project/runs/*/*.log
+            systolic_project/runs/*/synth_gen.ys
 
       - name: Upload Run Feature JSON
         uses: actions/upload-artifact@v4

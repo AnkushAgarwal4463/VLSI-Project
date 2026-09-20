@@ -1,9 +1,17 @@
 // systolic_array.v -- Parameterized NxN Systolic Array Grid
 `default_nettype none
 
+`ifndef ARRAY_SIZE
+  `define ARRAY_SIZE 4
+`endif
+
+`ifndef DATA_WIDTH
+  `define DATA_WIDTH 8
+`endif
+
 module systolic_array #(
-    parameter N     = 4,
-    parameter WIDTH = 8
+    parameter N     = `ARRAY_SIZE,
+    parameter WIDTH = `DATA_WIDTH
 ) (
     input  wire                     clk,
     input  wire                     rst_n,

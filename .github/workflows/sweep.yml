@@ -66,7 +66,7 @@ jobs:
 
           # 2. Safely generate SDC constraints without relying on multiline heredocs
           echo "create_clock -name clk -period ${CLK_PERIOD} [get_ports clk]" > "${SDC_FILE}"
-          echo "set_input_delay 0.1 -clock clk [all_inputs]" >> "${SDC_FILE}"
+          echo "set_input_delay 0.1 -clock clk [remove_from_collection [all_inputs] [get_ports clk]]" >> "${SDC_FILE}"
           echo "set_output_delay 0.1 -clock clk [all_outputs]" >> "${SDC_FILE}"
 
           echo "=== Starting Yosys Synthesis ==="

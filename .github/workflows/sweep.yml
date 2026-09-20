@@ -57,9 +57,10 @@ jobs:
           mkdir -p "${RUN_DIR}"
           mkdir -p "systolic_project/synth"
 
-          # Substitute dynamic parameters into Yosys script
+          # Substitute dynamic parameters and PDK paths into Yosys script
           sed -e "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" \
               -e "s/__DATA_WIDTH__/${DATA_WIDTH}/g" \
+              -e "s|__LIB_FILE__|${LIB_FILE}|g" \
               scripts/synth.ys > "${RUN_DIR}/synth_gen.ys"
 
           echo "=== Starting Yosys Synthesis ==="

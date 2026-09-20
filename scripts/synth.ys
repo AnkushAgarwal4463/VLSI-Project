@@ -2,8 +2,8 @@
 # Yosys RTL Synthesis Script for OpenROAD Matrix Pipeline (scripts/synth.ys)
 # ==============================================================================
 
-# Ensure target build directory exists
-exec mkdir -p systolic_project/synth
+# Note: Directory creation (systolic_project/synth) is handled directly in CI 
+# before calling Yosys to avoid native TCL parser command issues.
 
 # ------------------------------------------------------------------------------
 # 1. Read SystemVerilog RTL Source Files

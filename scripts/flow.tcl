@@ -62,14 +62,31 @@ if {!$sdc_found} {
 }
 
 # ------------------------------------------------------------------
-# 4. Floorplan Initialization
+# 4. Floorplan Initialization (Dynamically query site name)
 # ------------------------------------------------------------------
 set util 50.0
 if {[info exists ::env(UTIL)]} {
     set util $::env(UTIL)
 }
 
-initialize_floorplan -utilization $util -aspect_ratio 1.0 -core_space 10.0
+set site_name "Nangate45_site"
+set db [ord::get_db]
+if {$db != ""} {
+    set tech [$db getTech]
+    if {$tech != ""} {
+        set sites [$tech getSites]
+        if {[llength $sites] > 0} {
+            set site_name [[lindex $sites 0] getName]
+        }
+    }
+}
+
+puts "Initializing floorplan with utilization: $util%, site: $site_name"
+
+initialize_floorplan -utilization $util \
+                     -aspect_ratio 1.0 \
+                     -core_space 10.0 \
+                     -site $site_name
 
 # ------------------------------------------------------------------
 # 5. IO Pin Placement & Global Placement

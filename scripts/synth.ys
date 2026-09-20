@@ -2,10 +2,10 @@
 read_verilog -sv -DARRAY_SIZE=__ARRAY_SIZE__ -DDATA_WIDTH=__DATA_WIDTH__ rtl/pe.v
 read_verilog -sv -DARRAY_SIZE=__ARRAY_SIZE__ -DDATA_WIDTH=__DATA_WIDTH__ rtl/systolic_array.v
 
-# Pure top-level elaboration (no -chparam needed)
+# Pure top-level elaboration
 hierarchy -top systolic_array
 
-# Standard synthesis & cell mapping
+# Standard synthesis & optimization
 proc
 flatten
 opt
@@ -17,11 +17,11 @@ techmap
 opt
 
 # Standard cell mapping using container Liberty file
-dfflibmap -liberty $env(LIB_FILE)
-abc -liberty $env(LIB_FILE)
+dfflibmap -liberty __LIB_FILE__
+abc -liberty __LIB_FILE__
 opt
 clean
 
 # Output gate-level netlist and area stats
 write_verilog -noattr systolic_project/synth/systolic_netlist.v
-stat -liberty $env(LIB_FILE)
+stat -liberty __LIB_FILE__

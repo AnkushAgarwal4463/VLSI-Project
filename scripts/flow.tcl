@@ -176,7 +176,7 @@ if {[catch {
 }
 
 puts "\[INFO\] Running detailed placement..."
-detailed_placement -max_displacement 300 100
+detailed_placement
 check_placement
 
 # ==============================================================================

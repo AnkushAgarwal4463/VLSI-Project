@@ -20,7 +20,7 @@ if {[info exists ::env(SITE)] && $::env(SITE) != ""} {
 }
 
 # Target density configuration (Fixed for GPL-0302)
-set TARGET_DENSITY 0.72
+set TARGET_DENSITY 0.80
 
 # ==============================================================================
 # 2. Define Sky130 PDK Paths
@@ -46,23 +46,22 @@ link_design "systolic_array"
 # ==============================================================================
 # 4. Initialize Expanded Floorplan & Make Routing Tracks
 # ==============================================================================
-# Expanded Die Dimensions for 15,000+ cells (1000um x 1000um die area)
+# ==============================================================================
+# Expanded Floorplan to 1500um x 1500um (2.25 mm^2 total die)
+# ==============================================================================
 set die_x0 0.0
 set die_y0 0.0
-set die_x1 1000.0
-set die_y1 1000.0
+set die_x1 1500.0
+set die_y1 1500.0
 
-# 35um margin on each side for core placement
+# Core margin (35um boundary around core)
 set core_margin 35.0
 set core_x0 [expr {$die_x0 + $core_margin}]
 set core_y0 [expr {$die_y0 + $core_margin}]
 set core_x1 [expr {$die_x1 - $core_margin}]
 set core_y1 [expr {$die_y1 - $core_margin}]
 
-puts "Initializing expanded floorplan..."
-puts " Die Area : $die_x0 $die_y0 $die_x1 $die_y1"
-puts " Core Area: $core_x0 $core_y0 $core_x1 $core_y1"
-
+puts "Initializing floorplan (1500um x 1500um)..."
 initialize_floorplan \
     -die_area "$die_x0 $die_y0 $die_x1 $die_y1" \
     -core_area "$core_x0 $core_y0 $core_x1 $core_y1" \

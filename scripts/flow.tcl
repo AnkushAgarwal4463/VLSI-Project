@@ -41,15 +41,15 @@ read_verilog $netlist_verilog
 link_design "systolic_array"
 
 # ==============================================================================
-# 4. Initialize Floorplan & Make Routing Tracks (Fix for PPL-0024)
+# 4. Initialize Floorplan & Make Routing Tracks (Fix for 8000+ Pin Out-of-Bounds)
 # ==============================================================================
-# Dynamic core space: Expand padding at high utilization to prevent perimeter pinch
+# For extremely high pin counts (8000+ IOs), increase core margin to expand die perimeter
 if {$UTIL >= 60} {
-    set core_margin 25.0
+    set core_margin 35.0
 } elseif {$UTIL >= 40} {
-    set core_margin 15.0
+    set core_margin 25.0
 } else {
-    set core_margin 10.0
+    set core_margin 15.0
 }
 
 puts "Initializing floorplan with utilization: ${UTIL}%, site: ${site_name}, margin: ${core_margin}um"
@@ -61,7 +61,6 @@ initialize_floorplan \
 
 # Initialize routing grid tracks for pin placement and global routing
 make_tracks
-
 # ==============================================================================
 # 5. Define Clock & Timing Constraints
 # ==============================================================================

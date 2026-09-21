@@ -86,7 +86,7 @@ jobs:
           RUN_DIR: systolic_project/runs/${{ env.RUN_TAG }}
         run: |
           openroad -python scripts/extract_features.py \
-            systolic_project/runs/${RUN_TAG} ${RUN_TAG} ${UTIL} ${CLK_PERIOD} ${ARRAY_SIZE} ${DATA_WIDTH} \
+            systolic_project/runs/${RUN_TAG}${RUN_TAG} ${UTIL}${CLK_PERIOD} ${ARRAY_SIZE}${DATA_WIDTH} \
             > systolic_project/runs/${RUN_TAG}_features.json
 
       - name: Upload final results
@@ -103,6 +103,67 @@ jobs:
         if: always()
         run: |
           echo "### Run Summary for ${{ env.RUN_TAG }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Netlist produced: $(test -f systolic_project/synth/systolic_netlist.v && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
+          echo "- Netlist produced: $(test -f systolic_project/synth/systolic_netlist.v && echo YES \vert{}\vert{} echo NO)" >> $GITHUB_STEP_SUMMARY
           echo "- final.odb produced: $(test -f systolic_project/runs/${RUN_TAG}/final.odb && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
           echo "- Features JSON produced: $(test -f systolic_project/runs/${RUN_TAG}_features.json && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
+
+  aggregate-results:
+    needs: run-sweep
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install pandas
+
+      - name: Download all result artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded_artifacts/
+
+      - name: Combine JSON features into CSV
+        run: |
+          python3 -c '
+          import json, glob, os
+          import pandas as pd
+
+          records = []
+          for filepath in glob.glob("downloaded_artifacts/result-*/*_features.json"):
+              try:
+                  with open(filepath, "r") as f:
+                      data = json.load(f)
+                      records.append(data)
+              except Exception as e:
+                  print(f"Skipping {filepath}: {e}")
+
+          if records:
+              df = pd.DataFrame(records)
+              os.makedirs("summary_output", exist_ok=True)
+              df.to_csv("summary_output/systolic_array_sweep_dataset.csv", index=False)
+              print(f"Successfully aggregated {len(df)} records into systolic_array_sweep_dataset.csv")
+          else:
+              print("No feature files found to aggregate.")
+          '
+
+      - name: Upload Aggregated CSV Dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-sweep-dataset-csv
+          path: summary_output/systolic_array_sweep_dataset.csv
+
+      - name: Summary
+        run: |
+          echo "### Aggregate Dataset Summary" >> $GITHUB_STEP_SUMMARY
+          if [ -f summary_output/systolic_array_sweep_dataset.csv ]; then
+            COUNT=$(wc -l < summary_output/systolic_array_sweep_dataset.csv)
+            echo "Successfully generated \`systolic_array_sweep_dataset.csv\` with $((COUNT-1)) run entries." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Failed to generate aggregated CSV dataset." >> $GITHUB_STEP_SUMMARY
+          fi

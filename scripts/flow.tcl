@@ -213,35 +213,45 @@ if {$wns_val == "" || $wns_val == "INF"} {
     set slack_ps [expr {$wns_val * 1000.0}]
 }
 
-# 4. Wirelength Extraction (Proper OpenROAD API)
+# ==============================================================================
+# 4. Wirelength Extraction (report_wire_length)
+# ==============================================================================
 set total_wirelength_u 0.0
+set wl_report_file "${run_dir}/wirelength.rpt"
 
-# Method A: OpenROAD Global Router wirelength API
 if {[catch {
-    set total_wirelength_u [grt::get_route_wirelength]
+    report_wire_length -global_route -file $wl_report_file
 } err]} {
-    puts "\[WARNING\] grt::get_route_wirelength failed: $err"
-    
-    # Method B: Robust Half-Perimeter Wirelength (HPWL) Fallback via Bounding Boxes
-    set hpwl_db 0
-    foreach net [$block getNets] {
-        # Ignore power/ground/special nets
-        if {[$net isSpecial] || [$net getSigType] == "POWER" || [$net getSigType] == "GROUND"} {
-            continue
-        }
-        set wire [$net getWire]
-        if {$wire != "NULL" && $wire != ""} {
-            set bbox [$wire getBBox]
-            if {$bbox != "NULL" && $bbox != ""} {
-                set dx [expr {[$bbox xMax] - [$bbox xMin]}]
-                set dy [expr {[$bbox yMax] - [$bbox yMin]}]
-                set hpwl_db [expr {$hpwl_db + $dx + $dy}]
+    puts "\[WARNING\] report_wire_length failed: $err"
+} else {
+    if {[file exists $wl_report_file]} {
+        set fh [open $wl_report_file "r"]
+        set content [read $fh]
+        close $fh
+
+        # Pattern 1: Total wire length = <val>
+        if {[regexp -nocase {total\s+wire\s+length\s*[:=]\s*([0-9\.eE\+-]+)} $content -> total_wl]} {
+            set total_wirelength_u $total_wl
+        # Pattern 2: Total <val> (at beginning of line or end of table)
+        } elseif {[regexp -nocase -line {^total\s+([0-9\.eE\+-]+)} $content -> total_wl]} {
+            set total_wirelength_u $total_wl
+        # Pattern 3: Fallback line-by-line scanning for last numeric token on summary line
+        } else {
+            set lines [split $content "\n"]
+            foreach line $lines {
+                if {[regexp -nocase {total} $line]} {
+                    set tokens [regexp -all -inline {[0-9\.eE\+-]+} $line]
+                    if {[llength $tokens] > 0} {
+                        set total_wirelength_u [lindex $tokens end]
+                    }
+                }
             }
         }
+        puts "\[INFO\] Extracted Wirelength: ${total_wirelength_u} um"
+    } else {
+        puts "\[WARNING\] Wirelength report file not generated at $wl_report_file"
     }
-    set total_wirelength_u [expr {$hpwl_db / double($db_units)}]
 }
-
 # Write metrics directly to JSON file
 set json_file "systolic_project/runs/${RUN_TAG}_features.json"
 file mkdir "systolic_project/runs"

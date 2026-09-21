@@ -65,20 +65,30 @@ link_design $design_name
 # ==============================================================================
 # 3. Dynamic Floorplan Calculation with Safety Buffer
 # ==============================================================================
-# Compute total standard cell area from netlist in um^2
+# Compute total standard cell area directly from OpenROAD DB block
 set total_cell_area 0.0
+set block [ord::get_db_block]
+set db_units [$block getDbUnitsPerMicron]
 
-foreach inst [get_cells *] {
-    # Catch errors when inspecting top-level ports/pins that lack lib_cell
-    if {![catch {get_property -quiet $inst lib_cell} cell_master] && $cell_master != ""} {
-        set area [get_property $cell_master area]
-        set total_cell_area [expr {$total_cell_area + $area}]
+foreach inst [$block getInsts] {
+    set master [$inst getMaster]
+    # Check that master is a standard cell (not a block/macro or pad)
+    if {[$master isCore] || [$master isBlock] == 0} {
+        set m_width [expr {[$master getWidth] / double($db_units)}]
+        set m_height [expr {[$master getHeight] / double($db_units)}]
+        set total_cell_area [expr {$total_cell_area + ($m_width * $m_height)}]
     }
 }
 
 puts "\[INFO\] Total Standard Cell Area: ${total_cell_area} um^2"
 
-# Apply a 1.08x safety buffer (8% extra core room) to absorb cell padding & site alignment loss
+# Fallback check if total cell area evaluates to 0
+if {$total_cell_area == 0.0} {
+    puts "\[WARNING\] Total cell area calculated as 0.0 um^2! Applying fallback area."
+    set total_cell_area 50000.0
+}
+
+# Apply a 1.08x safety buffer (8% extra core room)
 set area_buffer 1.08
 set buffered_cell_area [expr {$total_cell_area * $area_buffer}]
 
@@ -88,7 +98,7 @@ set required_core_area [expr {$buffered_cell_area / $util_decimal}]
 # Calculate core dimensions (square aspect ratio)
 set core_dim [expr {sqrt($required_core_area)}]
 
-# Set margin for I/O pins and power routing (scaled up for high-pin count/utilization)
+# Set margin for I/O pins and power routing
 if {$UTIL >= 60} {
     set core_margin 45.0
 } else {
@@ -108,7 +118,16 @@ set core_y0 $core_margin
 set core_x1 [expr {$die_x1 - $core_margin}]
 set core_y1 [expr {$die_y1 - $core_margin}]
 
-puts "\[INFO\] Dynamic Floorplan Sizing (with 8% safety buffer):"
+# Ensure core dimensions are strictly valid (> 0)
+if {[expr {$core_x1 - $core_x0}] <= 0 || [expr {$core_y1 - $core_y0}] <= 0} {
+    puts "\[ERROR\] Core dimensions are invalid! Forcing core margin adjustments."
+    set core_x1 [expr {$core_x0 + $core_dim}]
+    set core_y1 [expr {$core_y0 + $core_dim}]
+    set die_x1 [expr {$core_x1 + $core_margin}]
+    set die_y1 [expr {$core_y1 + $core_margin}]
+}
+
+puts "\[INFO\] Dynamic Floorplan Sizing:"
 puts "       Die  Area : $die_x0 $die_y0 $die_x1 $die_y1"
 puts "       Core Area : $core_x0 $core_y0 $core_x1 $core_y1"
 

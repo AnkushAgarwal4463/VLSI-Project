@@ -159,9 +159,31 @@ if {[catch {
     puts "\[WARNING\] Pin placement warning: $err"
 }
 
-puts "Running detailed placement..."
+puts "\[INFO\] Running initial detailed placement..."
 detailed_placement
 check_placement
+
+# ==============================================================================
+# 5b. Design & Timing Repair (Fixes Negative Slack / WNS)
+# ==============================================================================
+puts "\[INFO\] Running design repair (slew, load, fanout)..."
+repair_design
+
+puts "\[INFO\] Running timing repair (buffer insertion & gate sizing)..."
+repair_timing -setup -setup_margin 0.2
+
+puts "\[INFO\] Legalizing placement after timing repair..."
+detailed_placement
+check_placement
+
+# ==============================================================================
+# 5c. Global Routing (Fixes Wirelength = 0)
+# ==============================================================================
+set run_dir "systolic_project/runs/$RUN_TAG"
+file mkdir $run_dir
+
+puts "\[INFO\] Running global routing for wirelength estimation..."
+global_routing -guide_file "${run_dir}/route.guide" -congestion_iterations 100
 
 # ==============================================================================
 # 6. Direct In-Memory Metric Extraction
@@ -186,9 +208,15 @@ if {$wns_val == "" || $wns_val == "INF"} {
     set slack_ps [expr {$wns_val * 1000.0}]
 }
 
-# 4. Wirelength
-if {[catch {set total_wirelength_u [groute_wire_length]} err]} {
-    set total_wirelength_u 0.0
+# 4. Wirelength (Extract wirelength after global routing)
+set total_wirelength_u 0.0
+if {[catch {
+    set total_wirelength_u [groute_wire_length]
+} err]} {
+    puts "\[WARNING\] groute_wire_length command failed: $err. Fallback to database lookup..."
+    foreach net [$block getNets] {
+        set total_wirelength_u [expr {$total_wirelength_u + ([$net getWirelength] / double($db_units))}]
+    }
 }
 
 # Write metrics directly to JSON file
@@ -212,7 +240,5 @@ close $fh
 puts "\[SUCCESS\] Extracted metrics directly to $json_file"
 
 # Save ODB database
-set run_dir "systolic_project/runs/$RUN_TAG"
-file mkdir $run_dir
 write_db "${run_dir}/final.odb"
 puts "\[SUCCESS\] Saved database to ${run_dir}/final.odb"

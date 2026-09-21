@@ -48,12 +48,13 @@ create_clock -name clk -period $CLK_PERIOD [get_ports clk]
 set_input_delay -clock clk 0.2 [all_inputs]
 set_output_delay -clock clk 0.2 [all_outputs]
 
-# 6. Global & Detailed Placement
-puts "Running placement..."
-global_placement
-placement_pad -side top -location 1
-placement_pad -side bottom -location 1
+# 6. Pin Placement & Detailed Placement
+puts "Running pin placement..."
+place_pins -hor_layers met3 -ver_layers met2
+
+puts "Running detailed placement..."
 detailed_placement
+check_placement
 
 # 7. Create Output Directory and Save Database
 if {[info exists ::env(RUN_TAG)] && $::env(RUN_TAG) != ""} {

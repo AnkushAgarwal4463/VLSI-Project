@@ -176,19 +176,23 @@ jobs:
 
       - name: Combine JSON features into CSV
         run: |
+          mkdir -p summary_output
           python3 scripts/aggregate_dataset.py --runs_dir downloaded_artifacts --output_csv summary_output/systolic_array_sweep_dataset.csv
 
       - name: Upload Aggregated CSV Dataset
         uses: actions/upload-artifact@v4
         with:
           name: full-sweep-dataset-csv
-          path: summary_output/systolic_array_sweep_dataset.csv
+          path: "**/systolic_array_sweep_dataset.csv"
+          if-no-files-found: error
 
       - name: Summary
         run: |
           echo "### Aggregate Dataset Summary" >> $GITHUB_STEP_SUMMARY
-          if [ -f summary_output/systolic_array_sweep_dataset.csv ]; then
-            COUNT=$(wc -l < summary_output/systolic_array_sweep_dataset.csv)
+          CSV_PATH="summary_output/systolic_array_sweep_dataset.csv"
+          
+          if [ -f "$CSV_PATH" ]; then
+            COUNT=$(wc -l < "$CSV_PATH")
             echo "Successfully generated \`systolic_array_sweep_dataset.csv\` with $((COUNT-1)) run entries." >> $GITHUB_STEP_SUMMARY
           else
             echo "Failed to generate aggregated CSV dataset." >> $GITHUB_STEP_SUMMARY

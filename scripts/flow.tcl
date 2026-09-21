@@ -29,7 +29,7 @@ link_design "systolic_array"
 current_design "systolic_array"
 
 # ==============================================================================
-# 3. Dynamic Floorplan Calculation (FIXES DPL-0036 on High Utilization)
+# 3. Dynamic Floorplan Calculation (FIXES GPL-0130 & Alignment Errors)
 # ==============================================================================
 set total_cell_area 0.0
 foreach inst [get_cells *] {
@@ -41,38 +41,61 @@ foreach inst [get_cells *] {
 
 puts "\[INFO\] Total Standard Cell Area: ${total_cell_area} um^2"
 
-# Core area calculated from gate area and target utilization
+# Calculate required core area based on utilization
 set required_core_area [expr {$total_cell_area / $util_decimal}]
 set core_dim [expr {sqrt($required_core_area)}]
 
-# Dynamic Margin Fix: High utilization requires expanded margins
+# Sky130 HD site height is 2.72 um; snap core dimensions to site height multiples
+set site_height 2.72
+set core_dim_snapped [expr {ceil($core_dim / $site_height) * $site_height}]
+
+# Dynamic Margin scaled to site height alignment
 if {$UTIL >= 60} {
-    set core_margin 50.0
+    set raw_margin 50.0
 } elseif {$UTIL >= 40} {
-    set core_margin 35.0
+    set raw_margin 35.0
 } else {
-    set core_margin 25.0
+    set raw_margin 25.0
 }
+set core_margin [expr {ceil($raw_margin / $site_height) * $site_height}]
 
-set die_dim [expr {$core_dim + (2 * $core_margin)}]
-set die_x0 0.0
-set die_y0 0.0
-set die_x1 [expr {ceil($die_dim)}]
-set die_y1 [expr {ceil($die_dim)}]
-
+# Calculate aligned die boundaries
 set core_x0 $core_margin
 set core_y0 $core_margin
-set core_x1 [expr {$die_x1 - $core_margin}]
-set core_y1 [expr {$die_y1 - $core_margin}]
+set core_x1 [expr {$core_x0 + $core_dim_snapped}]
+set core_y1 [expr {$core_y0 + $core_dim_snapped}]
 
-puts "\[INFO\] Initializing Floorplan:"
+set die_x0 0.0
+set die_y0 0.0
+set die_x1 [expr {$core_x1 + $core_margin}]
+set die_y1 [expr {$core_y1 + $core_margin}]
+
+puts "\[INFO\] Initializing Floorplan with Site Alignment:"
 puts "       Die  Area : $die_x0 $die_y0 $die_x1 $die_y1"
 puts "       Core Area : $core_x0 $core_y0 $core_x1 $core_y1"
 
-initialize_floorplan \
-    -die_area "$die_x0 $die_y0 $die_x1 $die_y1" \
-    -core_area "$core_x0 $core_y0 $core_x1 $core_y1" \
-    -site "unithd"
+# Try user specified site name first; fall back to Sky130 default site 'unithd' / 'unit'
+if {[catch {
+    initialize_floorplan \
+        -die_area "$die_x0 $die_y0 $die_x1 $die_y1" \
+        -core_area "$core_x0 $core_y0 $core_x1 $core_y1" \
+        -site $site_name
+} err]} {
+    puts "\[WARNING\] Floorplan initialization with site '$site_name' failed: $err"
+    if {[catch {
+        initialize_floorplan \
+            -die_area "$die_x0 $die_y0 $die_x1 $die_y1" \
+            -core_area "$core_x0 $core_y0 $core_x1 $core_y1" \
+            -site "unithd"
+    } err2]} {
+        puts "\[WARNING\] Floorplan initialization with site 'unithd' failed: $err2"
+        puts "\[INFO\] Retrying initialize_floorplan with fallback site 'unit'..."
+        initialize_floorplan \
+            -die_area "$die_x0 $die_y0 $die_x1 $die_y1" \
+            -core_area "$core_x0 $core_y0 $core_x1 $core_y1" \
+            -site "unit"
+    }
+}
 
 make_tracks
 

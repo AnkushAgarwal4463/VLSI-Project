@@ -1,8 +1,21 @@
-# Set site name from environment, defaulting to FreePDK45 verified site
+# Read variables from environment with safe defaults
+if {[info exists ::env(UTIL)] && $::env(UTIL) != ""} {
+    set UTIL $::env(UTIL)
+} else {
+    set UTIL 50
+}
+
+if {[info exists ::env(CLK_PERIOD)] && $::env(CLK_PERIOD) != ""} {
+    set CLK_PERIOD $::env(CLK_PERIOD)
+} else {
+    set CLK_PERIOD 10.0
+}
+
+# Set site name from environment, defaulting to Sky130 site (or FreePDK45 if specified)
 if {[info exists ::env(SITE)] && $::env(SITE) != ""} {
     set site_name $::env(SITE)
 } else {
-    set site_name "FreePDK45_38x28_10R_NP_162NW_34O"
+    set site_name "unithd"
 }
 
 puts "Initializing floorplan with utilization: ${UTIL}%, site: ${site_name}"

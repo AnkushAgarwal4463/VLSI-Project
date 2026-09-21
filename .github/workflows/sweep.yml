@@ -15,15 +15,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Run Single Test Job (Floorplan Verification)
+      - name: Run Single Test Job (Direct OpenROAD Tcl Driver)
         run: |
           mkdir -p runs/smoke_test
-          make DESIGN_CONFIG=config.mk \
-            WORK_DIR=runs/smoke_test \
-            SITE="FreePDK45_38x28_10R_NP_162NW_34O" \
-            CORE_UTILIZATION=50 \
-            CLOCK_PERIOD=10.0 \
-            VERILOG_DEFINES="ARRAY_SIZE=4 DATA_WIDTH=8"
+          openroad -exit scripts/flow.tcl \
+            -metrics runs/smoke_test/metrics.json
 
       - name: Upload Smoke Test Logs & Artifacts
         if: always()

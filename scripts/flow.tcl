@@ -19,6 +19,18 @@ if {[info exists ::env(SITE)] && $::env(SITE) != ""} {
     set site_name "unithd"
 }
 
+if {[info exists ::env(ARRAY_SIZE)] && $::env(ARRAY_SIZE) != ""} {
+    set ARRAY_SIZE $::env(ARRAY_SIZE)
+} else {
+    set ARRAY_SIZE 0
+}
+
+if {[info exists ::env(DATA_WIDTH)] && $::env(DATA_WIDTH) != ""} {
+    set DATA_WIDTH $::env(DATA_WIDTH)
+} else {
+    set DATA_WIDTH 0
+}
+
 # Convert utilization percentage to decimal (e.g., 70 -> 0.70)
 set util_decimal [expr {$UTIL / 100.0}]
 
@@ -139,14 +151,67 @@ detailed_placement -max_displacement 300 100
 check_placement
 
 # ==============================================================================
-# 6. Save Database
+# 6. Extract In-Memory SWIG Features & Save Database
 # ==============================================================================
 if {[info exists ::env(RUN_TAG)] && $::env(RUN_TAG) != ""} {
+    set run_tag $::env(RUN_TAG)
     set run_dir "systolic_project/runs/$::env(RUN_TAG)"
 } else {
+    set run_tag "sweep_run"
     set run_dir "systolic_project/runs/sweep_run"
 }
 
 file mkdir $run_dir
+
+# ------------------------------------------------------------------------------
+# In-Memory Metric Extraction via OpenROAD SWIG C++ APIs
+# ------------------------------------------------------------------------------
+set block [ord::get_db_block]
+
+# 1. Die Area Calculation (Micro-meters square)
+set die_box [$block getDieArea]
+set db_units [$block getDbUnitsPerMicron]
+set die_w [expr {([$die_box xMax] - [$die_box xMin]) / double($db_units)}]
+set die_h [expr {([$die_box yMax] - [$die_box yMin]) / double($db_units)}]
+set die_area_u2 [expr {$die_w * $die_h}]
+
+# 2. Total Cell Count
+set num_cells [llength [get_cells *]]
+
+# 3. Worst Negative Slack (Converted to picoseconds)
+set wns_val [sta::worst_slack -max]
+if {$wns_val == ""} {
+    set slack_ps 0.0
+} else {
+    set slack_ps [expr {$wns_val * 1000.0}]
+}
+
+# 4. Total Half-Perimeter Wirelength (HPWL Estimate in um)
+set total_wirelength_u 0.0
+foreach net [$block getNets] {
+    set total_wirelength_u [expr {$total_wirelength_u + [$net getHpwl]}]
+}
+set total_wirelength_u [expr {$total_wirelength_u / double($db_units)}]
+
+# 5. Write Feature JSON output
+set json_file "systolic_project/runs/${run_tag}_features.json"
+set fh [open $json_file "w"]
+
+puts $fh "{"
+puts $fh "  \"run_tag\": \"$run_tag\","
+puts $fh "  \"array_size\": $ARRAY_SIZE,"
+puts $fh "  \"data_width\": $DATA_WIDTH,"
+puts $fh "  \"utilization\": $UTIL,"
+puts $fh "  \"clk_period_ns\": $CLK_PERIOD,"
+puts $fh "  \"num_cells\": $num_cells,"
+puts $fh "  \"die_area_u2\": [format "%.2f" $die_area_u2],"
+puts $fh "  \"wirelength_u\": [format "%.2f" $total_wirelength_u],"
+puts $fh "  \"slack_ps\": [format "%.2f" $slack_ps]"
+puts $fh "}"
+close $fh
+
+puts "\[INFO\] Feature JSON generated at: $json_file"
+
+# Write final ODB file matching GitHub workflow expectations
 write_db "${run_dir}/final.odb"
 puts "\[INFO\] Successfully saved database to ${run_dir}/final.odb"

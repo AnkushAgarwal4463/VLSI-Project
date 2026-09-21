@@ -19,6 +19,9 @@ if {[info exists ::env(SITE)] && $::env(SITE) != ""} {
     set site_name "unithd"
 }
 
+# Target density configuration (Fixed for GPL-0302)
+set TARGET_DENSITY 0.72
+
 # ==============================================================================
 # 2. Define Sky130 PDK Paths
 # ==============================================================================
@@ -41,22 +44,28 @@ read_verilog $netlist_verilog
 link_design "systolic_array"
 
 # ==============================================================================
-# 4. Initialize Floorplan & Make Routing Tracks (PPL-0024 Floorplan Expansion)
+# 4. Initialize Expanded Floorplan & Make Routing Tracks
 # ==============================================================================
-# For 8000+ pin count designs, expand core margin to enlarge the die perimeter.
-if {$UTIL >= 60} {
-    set core_margin 35.0
-} elseif {$UTIL >= 40} {
-    set core_margin 25.0
-} else {
-    set core_margin 15.0
-}
+# Expanded Die Dimensions for 15,000+ cells (1000um x 1000um die area)
+set die_x0 0.0
+set die_y0 0.0
+set die_x1 1000.0
+set die_y1 1000.0
 
-puts "Initializing floorplan with utilization: ${UTIL}%, site: ${site_name}, margin: ${core_margin}um"
+# 35um margin on each side for core placement
+set core_margin 35.0
+set core_x0 [expr {$die_x0 + $core_margin}]
+set core_y0 [expr {$die_y0 + $core_margin}]
+set core_x1 [expr {$die_x1 - $core_margin}]
+set core_y1 [expr {$die_y1 - $core_margin}]
+
+puts "Initializing expanded floorplan..."
+puts " Die Area : $die_x0 $die_y0 $die_x1 $die_y1"
+puts " Core Area: $core_x0 $core_y0 $core_x1 $core_y1"
+
 initialize_floorplan \
-    -utilization $UTIL \
-    -aspect_ratio 1.0 \
-    -core_space $core_margin \
+    -die_area "$die_x0 $die_y0 $die_x1 $die_y1" \
+    -core_area "$core_x0 $core_y0 $core_x1 $core_y1" \
     -site $site_name
 
 # Generate routing tracks across all metal layers for pin grid snapping
@@ -78,19 +87,19 @@ set_output_delay -clock clk 0.2 [all_outputs]
 # ==============================================================================
 # 6. Global Placement, Multi-Layer Pin Placement & Detailed Placement
 # ==============================================================================
-puts "Running global placement..."
-# Enable standard cell placement padding on high-utilization runs
+puts "Running global placement with target density $TARGET_DENSITY..."
+
 if {$UTIL >= 60} {
     set_placement_padding -global -left 1 -right 1
 }
 
-global_placement
+# Run global placement with increased target density parameter
+global_placement -density $TARGET_DENSITY
 
 puts "Running pin placement (Multi-layer allocation)..."
 set io_hor_layers [list met3 met5]
 set io_ver_layers [list met2 met4]
 
-# Native pin placement in OpenROAD
 if {[catch {
     place_pins -hor_layers $io_hor_layers \
                -ver_layers $io_ver_layers

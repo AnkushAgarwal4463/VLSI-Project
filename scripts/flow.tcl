@@ -54,11 +54,15 @@ link_design "systolic_array"
 # ==============================================================================
 # Compute total standard cell area from netlist in um^2
 set total_cell_area 0.0
+
 foreach inst [get_cells *] {
-    set cell_master [get_property $inst lib_cell]
-    if {$cell_master != ""} {
-        set area [get_property $cell_master area]
-        set total_cell_area [expr {$total_cell_area + $area}]
+    # Skip top-level ports/hierarchical instances that don't have a library cell master
+    if {![get_property -quiet $inst is_hierarchical]} {
+        set cell_master [get_property -quiet $inst lib_cell]
+        if {$cell_master != ""} {
+            set area [get_property $cell_master area]
+            set total_cell_area [expr {$total_cell_area + $area}]
+        }
     }
 }
 
@@ -104,7 +108,6 @@ initialize_floorplan \
     -site $site_name
 
 make_tracks
-
 # ==============================================================================
 # 4. Timing Constraints
 # ==============================================================================

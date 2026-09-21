@@ -85,22 +85,22 @@ if {$UTIL >= 60} {
 }
 
 puts "Running pin placement (Multi-layer allocation)..."
-# Multi-layer IO pin assignment to avoid PPL-0024 capacity issues
 set io_hor_layers [list met3 met5]
 set io_ver_layers [list met2 met4]
 
-# Attempt pin placement with multi-layer assignment and 1-track spacing
+# Set minimum pin distance constraint to 1 track unit
+set_io_pin_constraint -direction * -min_distance 1
+
+# Execute pin placement across multi-layer assignment
 if {[catch {
     place_pins -hor_layers $io_hor_layers \
                -ver_layers $io_ver_layers \
-               -pin_spacing 1 \
                -random
 } err]} {
     puts "\[WARNING\] Standard pin placement failed: $err"
     puts "\[INFO\] Retrying pin placement with annealing fallback..."
     place_pins -hor_layers $io_hor_layers \
                -ver_layers $io_ver_layers \
-               -pin_spacing 1 \
                -annealing
 }
 

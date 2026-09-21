@@ -34,7 +34,7 @@ puts "Reading synthesized netlist..."
 read_verilog $netlist_verilog
 link_design "systolic_array"
 
-# 4. Initialize Floorplan
+# 4. Initialize Floorplan & Make Routing Tracks
 puts "Initializing floorplan with utilization: ${UTIL}%, site: ${site_name}"
 initialize_floorplan \
     -utilization $UTIL \
@@ -42,13 +42,19 @@ initialize_floorplan \
     -core_space 10.0 \
     -site $site_name
 
+# Initialize routing grid tracks for pin placement and routing
+make_tracks
+
 # 5. Define Clock & Timing Constraints
-# Find the actual clock pin or create default clk
 create_clock -name clk -period $CLK_PERIOD [get_ports clk]
-set_input_delay -clock clk 0.2 [all_inputs]
+# Set delays on all inputs except the clock pin itself
+set_input_delay -clock clk 0.2 [get_ports -filter {name != clk}]
 set_output_delay -clock clk 0.2 [all_outputs]
 
-# 6. Pin Placement & Detailed Placement
+# 6. Global Placement, Pin Placement & Detailed Placement
+puts "Running global placement..."
+global_placement
+
 puts "Running pin placement..."
 place_pins -hor_layers met3 -ver_layers met2
 

@@ -214,43 +214,54 @@ if {$wns_val == "" || $wns_val == "INF"} {
 }
 
 # ==============================================================================
-# 4. Wirelength Extraction (report_wire_length)
+# 4. Robust Wirelength Extraction
 # ==============================================================================
 set total_wirelength_u 0.0
 set wl_report_file "${run_dir}/wirelength.rpt"
 
+# Fix: Use 'redirect' because report_wire_length lacks a native -file flag
 if {[catch {
-    report_wire_length -global_route -file $wl_report_file
+    redirect $wl_report_file { report_wire_length -global_route }
 } err]} {
-    puts "\[WARNING\] report_wire_length failed: $err"
-} else {
-    if {[file exists $wl_report_file]} {
-        set fh [open $wl_report_file "r"]
-        set content [read $fh]
-        close $fh
+    puts "\[WARNING\] Redirection failed: $err"
+}
 
-        # Pattern 1: Total wire length = <val>
-        if {[regexp -nocase {total\s+wire\s+length\s*[:=]\s*([0-9\.eE\+-]+)} $content -> total_wl]} {
-            set total_wirelength_u $total_wl
-        # Pattern 2: Total <val> (at beginning of line or end of table)
-        } elseif {[regexp -nocase -line {^total\s+([0-9\.eE\+-]+)} $content -> total_wl]} {
-            set total_wirelength_u $total_wl
-        # Pattern 3: Fallback line-by-line scanning for last numeric token on summary line
-        } else {
-            set lines [split $content "\n"]
-            foreach line $lines {
-                if {[regexp -nocase {total} $line]} {
-                    set tokens [regexp -all -inline {[0-9\.eE\+-]+} $line]
-                    if {[llength $tokens] > 0} {
-                        set total_wirelength_u [lindex $tokens end]
-                    }
+# Parse generated report file if present
+if {[file exists $wl_report_file]} {
+    set fh [open $wl_report_file "r"]
+    set content [read $fh]
+    close $fh
+
+    # Pattern 1: Total wire length = <val>
+    if {[regexp -nocase {total\s+wire\s+length\s*[:=]\s*([0-9\.eE\+-]+)} $content -> total_wl]} {
+        set total_wirelength_u $total_wl
+    # Pattern 2: Total <val> (at beginning of line or end of table)
+    } elseif {[regexp -nocase -line {^total\s+([0-9\.eE\+-]+)} $content -> total_wl]} {
+        set total_wirelength_u $total_wl
+    # Pattern 3: Line-by-line scanning for last numeric token on summary line
+    } else {
+        set lines [split $content "\n"]
+        foreach line $lines {
+            if {[regexp -nocase {total} $line]} {
+                set tokens [regexp -all -inline {[0-9\.eE\+-]+} $line]
+                if {[llength $tokens] > 0} {
+                    set total_wirelength_u [lindex $tokens end]
                 }
             }
         }
-        puts "\[INFO\] Extracted Wirelength: ${total_wirelength_u} um"
-    } else {
-        puts "\[WARNING\] Wirelength report file not generated at $wl_report_file"
     }
+}
+
+# In-Memory C++ API Fallback (Guarantees non-zero value if routing exists)
+if {$total_wirelength_u == 0.0} {
+    puts "\[INFO\] File parsing returned 0.0. Querying OpenROAD database API..."
+    if {![catch {set total_wirelength_u [groute_wire_length]}]} {
+        puts "\[INFO\] Extracted via groute_wire_length: ${total_wirelength_u} um"
+    } else {
+        puts "\[WARNING\] Database wirelength retrieval failed. Is global_route complete?"
+    }
+} else {
+    puts "\[INFO\] Extracted Wirelength: ${total_wirelength_u} um"
 }
 # Write metrics directly to JSON file
 set json_file "systolic_project/runs/${RUN_TAG}_features.json"

@@ -79,27 +79,23 @@ set_output_delay -clock clk 0.2 [all_outputs]
 # 6. Global Placement, Multi-Layer Pin Placement & Detailed Placement
 # ==============================================================================
 puts "Running global placement..."
+# Enable standard cell placement padding on high-utilization runs
 if {$UTIL >= 60} {
-    global_placement -density_penalty 0.05
-} else {
-    global_placement
+    set_placement_padding -global -left 1 -right 1
 }
+
+global_placement
 
 puts "Running pin placement (Multi-layer allocation)..."
 set io_hor_layers [list met3 met5]
 set io_ver_layers [list met2 met4]
 
-# Native multi-layer placement using pure place_pins options
+# Native pin placement in OpenROAD
 if {[catch {
     place_pins -hor_layers $io_hor_layers \
-               -ver_layers $io_ver_layers \
-               -random
+               -ver_layers $io_ver_layers
 } err]} {
-    puts "\[WARNING\] Random pin placement failed: $err"
-    puts "\[INFO\] Retrying pin placement with annealing mode..."
-    place_pins -hor_layers $io_hor_layers \
-               -ver_layers $io_ver_layers \
-               -annealing
+    puts "\[WARNING\] Pin placement failed: $err"
 }
 
 puts "Running detailed placement..."

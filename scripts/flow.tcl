@@ -58,7 +58,15 @@ set_output_delay -clock clk 0.2 [all_outputs]
 
 # 6. Global Placement, Pin Placement & Detailed Placement
 puts "Running global placement..."
-global_placement
+
+# Derive global placement density safely from utilization
+# For high utilization runs (e.g. 70%), cap target density slightly higher
+if {$UTIL >= 60} {
+    set gpl_density [expr {min(0.95, ($UTIL / 100.0) + 0.05)}]
+    global_placement -density $gpl_density
+} else {
+    global_placement
+}
 
 puts "Running pin placement..."
 place_pins -hor_layers met3 -ver_layers met2
@@ -66,7 +74,6 @@ place_pins -hor_layers met3 -ver_layers met2
 puts "Running detailed placement..."
 detailed_placement
 check_placement
-
 # 7. Create Output Directory and Save Database
 if {[info exists ::env(RUN_TAG)] && $::env(RUN_TAG) != ""} {
     set run_dir "systolic_project/runs/$::env(RUN_TAG)"

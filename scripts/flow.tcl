@@ -183,7 +183,7 @@ set run_dir "systolic_project/runs/$RUN_TAG"
 file mkdir $run_dir
 
 puts "\[INFO\] Running global routing for wirelength estimation..."
-global_routing -guide_file "${run_dir}/route.guide" -congestion_iterations 100
+global_route -guide_file "${run_dir}/route.guide" -congestion_iterations 100
 
 # ==============================================================================
 # 6. Direct In-Memory Metric Extraction

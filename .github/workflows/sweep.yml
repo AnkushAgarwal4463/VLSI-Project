@@ -2,7 +2,12 @@ name: Systolic Array Congestion Sweep (72 Runs)
 
 on:
   workflow_dispatch:
-
+  
+# Grant upload permissions to GITHUB_TOKEN
+permissions:
+  contents: read
+  actions: write
+  
 jobs:
   run-sweep:
     runs-on: ubuntu-latest

@@ -89,19 +89,18 @@ puts "Running pin placement (Multi-layer allocation)..."
 set io_hor_layers [list met3 met5]
 set io_ver_layers [list met2 met4]
 
-# Set minimum pin spacing to 1 track
-set_io_pin_constraint -pin_spacing 1
-
-# Attempt pin placement with multi-layer assignment
+# Attempt pin placement with multi-layer assignment and 1-track spacing
 if {[catch {
     place_pins -hor_layers $io_hor_layers \
                -ver_layers $io_ver_layers \
+               -pin_spacing 1 \
                -random
 } err]} {
     puts "\[WARNING\] Standard pin placement failed: $err"
     puts "\[INFO\] Retrying pin placement with annealing fallback..."
     place_pins -hor_layers $io_hor_layers \
                -ver_layers $io_ver_layers \
+               -pin_spacing 1 \
                -annealing
 }
 

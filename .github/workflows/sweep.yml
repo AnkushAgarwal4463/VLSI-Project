@@ -16,11 +16,66 @@ jobs:
       fail-fast: false
       max-parallel: 16
       matrix:
-        array_size: [4, 8, 16]
-        data_width: [8, 16]
-        utilization: [20, 30, 40, 50, 60, 70]
-        clk_period: [2.0, 5.0]
+        include:
+          # ====================================================================
+          # 4x4 Array Runs (Clock Periods: 3.0 ns & 5.0 ns)
+          # ====================================================================
+          - array_size: 4
+            data_width: 8
+            utilization: 30
+            clk_period: 3.0
+          - array_size: 4
+            data_width: 8
+            utilization: 50
+            clk_period: 5.0
+          - array_size: 4
+            data_width: 16
+            utilization: 30
+            clk_period: 3.0
+          - array_size: 4
+            data_width: 16
+            utilization: 50
+            clk_period: 5.0
 
+          # ====================================================================
+          # 8x8 Array Runs (Clock Periods: 5.0 ns & 8.0 ns)
+          # ====================================================================
+          - array_size: 8
+            data_width: 8
+            utilization: 40
+            clk_period: 5.0
+          - array_size: 8
+            data_width: 8
+            utilization: 60
+            clk_period: 8.0
+          - array_size: 8
+            data_width: 16
+            utilization: 40
+            clk_period: 5.0
+          - array_size: 8
+            data_width: 16
+            utilization: 60
+            clk_period: 8.0
+
+          # ====================================================================
+          # 16x16 Array Runs (Clock Periods: 10.0 ns & 15.0 ns)
+          # ====================================================================
+          - array_size: 16
+            data_width: 8
+            utilization: 50
+            clk_period: 10.0
+          - array_size: 16
+            data_width: 8
+            utilization: 70
+            clk_period: 15.0
+          - array_size: 16
+            data_width: 16
+            utilization: 50
+            clk_period: 10.0
+          - array_size: 16
+            data_width: 16
+            utilization: 70
+            clk_period: 15.0
     steps:
       - uses: actions/checkout@v4
 

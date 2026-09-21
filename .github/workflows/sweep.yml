@@ -9,13 +9,12 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      max-parallel: 16  # Prevents GitHub API rate limits and balances queue execution
+      max-parallel: 16
       matrix:
         array_size: [4, 8, 16]
         data_width: [8, 16]
         utilization: [20, 30, 40, 50, 60, 70]
         clk_period: [2.0, 5.0]
-        # Total runs: 3 * 2 * 6 * 2 = 72
 
     steps:
       - uses: actions/checkout@v4
@@ -64,16 +63,6 @@ jobs:
           yosys -s scripts/synth_run.ys 2>&1 | tee systolic_project/synth/synth_log.txt
           test -f systolic_project/synth/systolic_netlist.v
 
-      - name: Upload synthesis outputs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: synth-outputs-${{ env.RUN_TAG }}
-          path: |
-            systolic_project/synth/
-            scripts/synth_run.ys
-          if-no-files-found: ignore
-
       - name: Run OpenROAD flow
         timeout-minutes: 30
         run: |
@@ -82,12 +71,8 @@ jobs:
 
       - name: Extract features
         if: success()
-        env:
-          RUN_DIR: systolic_project/runs/${{ env.RUN_TAG }}
         run: |
-          openroad -python scripts/extract_features.py \
-            systolic_project/runs/${RUN_TAG}${RUN_TAG} ${UTIL}${CLK_PERIOD} ${ARRAY_SIZE}${DATA_WIDTH} \
-            > systolic_project/runs/${RUN_TAG}_features.json
+          python3 scripts/extract_features.py
 
       - name: Upload final results
         if: always()
@@ -95,8 +80,8 @@ jobs:
         with:
           name: result-${{ env.RUN_TAG }}
           path: |
-            systolic_project/runs/${RUN_TAG}_log.txt
-            systolic_project/runs/${RUN_TAG}_features.json
+            systolic_project/runs/${{ env.RUN_TAG }}_log.txt
+            systolic_project/runs/${{ env.RUN_TAG }}_features.json
           if-no-files-found: warn
 
       - name: Summary
@@ -127,30 +112,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: downloaded_artifacts/
+          merge-multiple: true
 
       - name: Combine JSON features into CSV
         run: |
-          python3 -c '
-          import json, glob, os
-          import pandas as pd
-
-          records = []
-          for filepath in glob.glob("downloaded_artifacts/result-*/*_features.json"):
-              try:
-                  with open(filepath, "r") as f:
-                      data = json.load(f)
-                      records.append(data)
-              except Exception as e:
-                  print(f"Skipping {filepath}: {e}")
-
-          if records:
-              df = pd.DataFrame(records)
-              os.makedirs("summary_output", exist_ok=True)
-              df.to_csv("summary_output/systolic_array_sweep_dataset.csv", index=False)
-              print(f"Successfully aggregated {len(df)} records into systolic_array_sweep_dataset.csv")
-          else:
-              print("No feature files found to aggregate.")
-          '
+          python3 scripts/aggregate_dataset.py --runs_dir downloaded_artifacts --output_csv summary_output/systolic_array_sweep_dataset.csv
 
       - name: Upload Aggregated CSV Dataset
         uses: actions/upload-artifact@v4

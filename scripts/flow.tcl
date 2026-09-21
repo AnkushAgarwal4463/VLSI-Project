@@ -88,8 +88,8 @@ puts "Running pin placement (Multi-layer allocation)..."
 set io_hor_layers [list met3 met5]
 set io_ver_layers [list met2 met4]
 
-# Set minimum pin distance constraint to 1 track unit
-set_io_pin_constraint -direction * -min_distance 1
+# Configure pin constraints using valid OpenROAD syntax
+set_io_pin_constraint -direction * -spacing 1
 
 # Execute pin placement across multi-layer assignment
 if {[catch {

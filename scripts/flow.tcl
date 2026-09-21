@@ -159,8 +159,8 @@ if {[catch {
     puts "\[WARNING\] Pin placement warning: $err"
 }
 
-puts "Running detailed placement with custom displacement..."
-detailed_placement -max_displacement_x 400 -max_displacement_y 100
+puts "Running detailed placement..."
+detailed_placement
 check_placement
 
 # ==============================================================================

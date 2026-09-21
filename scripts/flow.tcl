@@ -177,13 +177,18 @@ detailed_placement
 check_placement
 
 # ==============================================================================
-# 5c. Global Routing (Fixes Wirelength = 0)
+# 5c. Global Routing & In-Memory Metric Extraction
 # ==============================================================================
 set run_dir "systolic_project/runs/$RUN_TAG"
 file mkdir $run_dir
 
 puts "\[INFO\] Running global routing for wirelength estimation..."
-global_route -guide_file "${run_dir}/route.guide" -congestion_iterations 100
+if {[catch {
+    global_route -guide_file "${run_dir}/route.guide" \
+                 -congestion_iterations 100
+} err]} {
+    puts "\[WARNING\] global_route failed: $err"
+}
 
 # ==============================================================================
 # 6. Direct In-Memory Metric Extraction
@@ -200,7 +205,7 @@ set die_area_u2 [expr {$die_w * $die_h}]
 # 2. Total Cell Count
 set num_cells [llength [get_cells *]]
 
-# 3. Slack Conversion (in ps)
+# 3. Worst Negative Slack (WNS in ps)
 set wns_val [sta::worst_slack -max]
 if {$wns_val == "" || $wns_val == "INF"} {
     set slack_ps 0.0
@@ -208,15 +213,33 @@ if {$wns_val == "" || $wns_val == "INF"} {
     set slack_ps [expr {$wns_val * 1000.0}]
 }
 
-# 4. Wirelength (Extract wirelength after global routing)
+# 4. Wirelength Extraction (Proper OpenROAD API)
 set total_wirelength_u 0.0
+
+# Method A: OpenROAD Global Router wirelength API
 if {[catch {
-    set total_wirelength_u [groute_wire_length]
+    set total_wirelength_u [grt::get_route_wirelength]
 } err]} {
-    puts "\[WARNING\] groute_wire_length command failed: $err. Fallback to database lookup..."
+    puts "\[WARNING\] grt::get_route_wirelength failed: $err"
+    
+    # Method B: Robust Half-Perimeter Wirelength (HPWL) Fallback via Bounding Boxes
+    set hpwl_db 0
     foreach net [$block getNets] {
-        set total_wirelength_u [expr {$total_wirelength_u + ([$net getWirelength] / double($db_units))}]
+        # Ignore power/ground/special nets
+        if {[$net isSpecial] || [$net getSigType] == "POWER" || [$net getSigType] == "GROUND"} {
+            continue
+        }
+        set wire [$net getWire]
+        if {$wire != "NULL" && $wire != ""} {
+            set bbox [$wire getBBox]
+            if {$bbox != "NULL" && $bbox != ""} {
+                set dx [expr {[$bbox xMax] - [$bbox xMin]}]
+                set dy [expr {[$bbox yMax] - [$bbox yMin]}]
+                set hpwl_db [expr {$hpwl_db + $dx + $dy}]
+            }
+        }
     }
+    set total_wirelength_u [expr {$hpwl_db / double($db_units)}]
 }
 
 # Write metrics directly to JSON file

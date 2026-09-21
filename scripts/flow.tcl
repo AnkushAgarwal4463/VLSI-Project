@@ -47,8 +47,13 @@ make_tracks
 
 # 5. Define Clock & Timing Constraints
 create_clock -name clk -period $CLK_PERIOD [get_ports clk]
-# Set delays on all inputs except the clock pin itself
-set_input_delay -clock clk 0.2 [get_ports -filter {name != clk}]
+
+# Get all inputs except clock
+set in_ports [get_ports * -filter "direction == input && name != clk"]
+if {[llength $in_ports] > 0} {
+    set_input_delay -clock clk 0.2 $in_ports
+}
+
 set_output_delay -clock clk 0.2 [all_outputs]
 
 # 6. Global Placement, Pin Placement & Detailed Placement

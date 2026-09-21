@@ -214,18 +214,16 @@ foreach inst [get_cells *] {
 
 # 3. Worst Negative Slack (converted to ps)
 set wns_val [sta::worst_slack -max]
-if {$wns_val == ""} {
+if {$wns_val == "" || $wns_val == "INF"} {
     set slack_ps 0.0
 } else {
     set slack_ps [expr {$wns_val * 1000.0}]
 }
 
-# 4. Total Half-Perimeter Wirelength (HPWL Estimate in um)
-set total_wirelength_u 0.0
-foreach net [$block getNets] {
-    set total_wirelength_u [expr {$total_wirelength_u + [$net getHpwl]}]
+# 4. Total Wirelength (Safe evaluation)
+if {[catch {set total_wirelength_u [groute_wire_length]} err]} {
+    set total_wirelength_u 0.0
 }
-set total_wirelength_u [expr {$total_wirelength_u / double($db_units)}]
 
 # 5. Write Feature JSON output
 set json_file "systolic_project/runs/${run_tag}_features.json"

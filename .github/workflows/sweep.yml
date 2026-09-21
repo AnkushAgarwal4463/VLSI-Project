@@ -1,29 +1,108 @@
-name: OpenROAD Single Smoke Test
+name: Systolic Array Congestion Sweep (72 Runs)
 
 on:
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
-  smoke-test:
+  run-sweep:
     runs-on: ubuntu-latest
-    container:
-      image: openroad/orfs:latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 16  # Prevents GitHub API rate limits and balances queue execution
+      matrix:
+        array_size: [4, 8, 16]
+        data_width: [8, 16]
+        utilization: [20, 30, 40, 50, 60, 70]
+        clk_period: [2.0, 5.0]
+        # Total runs: 3 * 2 * 6 * 2 = 72
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Run Single Test Job (Direct OpenROAD Tcl Driver)
+      - name: Cache Conda Toolchain
+        id: cache-conda
+        uses: actions/cache@v4
+        with:
+          path: ./conda-env
+          key: ${{ runner.os }}-condapdk-v4-diskfix
+
+      - name: Free up disk space before install
+        if: steps.cache-conda.outputs.cache-hit != 'true'
         run: |
-          mkdir -p runs/smoke_test
-          openroad -exit scripts/flow.tcl \
-            -metrics runs/smoke_test/metrics.json
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
 
-      - name: Upload Smoke Test Logs & Artifacts
+      - name: Install toolchain
+        if: steps.cache-conda.outputs.cache-hit != 'true'
+        timeout-minutes: 40
+        run: |
+          set -euo pipefail
+          curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+          ./bin/micromamba create --yes --prefix ./conda-env \
+            --channel litex-hub --channel main \
+            open_pdks.sky130a openroad yosys
+
+      - name: Add toolchain to PATH
+        run: echo "$(pwd)/conda-env/bin" >> $GITHUB_PATH
+
+      - name: Set run environment
+        run: |
+          echo "ARRAY_SIZE=${{ matrix.array_size }}" >> $GITHUB_ENV
+          echo "DATA_WIDTH=${{ matrix.data_width }}" >> $GITHUB_ENV
+          echo "UTIL=${{ matrix.utilization }}" >> $GITHUB_ENV
+          echo "CLK_PERIOD=${{ matrix.clk_period }}" >> $GITHUB_ENV
+          echo "RUN_TAG=sys${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.utilization }}_clk${{ matrix.clk_period }}" >> $GITHUB_ENV
+
+      - name: Synthesize
+        timeout-minutes: 10
+        run: |
+          mkdir -p systolic_project/synth systolic_project/runs
+          cp scripts/synth.ys scripts/synth_run.ys
+          sed -i "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" scripts/synth_run.ys
+          sed -i "s/__DATA_WIDTH__/${DATA_WIDTH}/g" scripts/synth_run.ys
+          yosys -s scripts/synth_run.ys 2>&1 | tee systolic_project/synth/synth_log.txt
+          test -f systolic_project/synth/systolic_netlist.v
+
+      - name: Upload synthesis outputs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-test-logs
-          path: runs/smoke_test/
+          name: synth-outputs-${{ env.RUN_TAG }}
+          path: |
+            systolic_project/synth/
+            scripts/synth_run.ys
+          if-no-files-found: ignore
+
+      - name: Run OpenROAD flow
+        timeout-minutes: 30
+        run: |
+          openroad -exit scripts/flow.tcl 2>&1 | tee systolic_project/runs/${RUN_TAG}_log.txt
+          test -f systolic_project/runs/${RUN_TAG}/final.odb
+
+      - name: Extract features
+        if: success()
+        env:
+          RUN_DIR: systolic_project/runs/${{ env.RUN_TAG }}
+        run: |
+          openroad -python scripts/extract_features.py \
+            systolic_project/runs/${RUN_TAG} ${RUN_TAG} ${UTIL} ${CLK_PERIOD} ${ARRAY_SIZE} ${DATA_WIDTH} \
+            > systolic_project/runs/${RUN_TAG}_features.json
+
+      - name: Upload final results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: result-${{ env.RUN_TAG }}
+          path: |
+            systolic_project/runs/${RUN_TAG}_log.txt
+            systolic_project/runs/${RUN_TAG}_features.json
+          if-no-files-found: warn
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Run Summary for ${{ env.RUN_TAG }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Netlist produced: $(test -f systolic_project/synth/systolic_netlist.v && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
+          echo "- final.odb produced: $(test -f systolic_project/runs/${RUN_TAG}/final.odb && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
+          echo "- Features JSON produced: $(test -f systolic_project/runs/${RUN_TAG}_features.json && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY

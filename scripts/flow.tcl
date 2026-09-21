@@ -22,7 +22,11 @@ read_liberty $lib_file
 read_lef $tech_lef
 read_lef $std_cell_lef
 read_verilog $netlist_verilog
+
+# FIX: Explicitly link design AND set current design context
+puts "\[INFO\] Linking design systolic_array..."
 link_design "systolic_array"
+current_design "systolic_array"
 
 # ==============================================================================
 # 3. Dynamic Floorplan Calculation (FIXES DPL-0036 on High Utilization)
@@ -41,7 +45,7 @@ puts "\[INFO\] Total Standard Cell Area: ${total_cell_area} um^2"
 set required_core_area [expr {$total_cell_area / $util_decimal}]
 set core_dim [expr {sqrt($required_core_area)}]
 
-# DYNAMIC MARGIN FIX: High utilization requires expanded margins for legalizer rows
+# Dynamic Margin Fix: High utilization requires expanded margins
 if {$UTIL >= 60} {
     set core_margin 50.0
 } elseif {$UTIL >= 40} {
@@ -85,7 +89,6 @@ set_output_delay -clock clk 0.2 [all_outputs]
 # ==============================================================================
 # 5. Global & Detailed Placement
 # ==============================================================================
-# Dynamic Target Density Cap to prevent local bin overflow
 set place_density $util_decimal
 if {$place_density > 0.68} {
     set place_density 0.68
@@ -106,12 +109,11 @@ if {[catch {
 }
 
 puts "\[INFO\] Running detailed placement..."
-# Increased displacement search radius to solve DPL-0036
 detailed_placement -max_displacement 500 200
 check_placement
 
 # ==============================================================================
-# 6. Direct In-Memory Metric Extraction (POPULATES CSV CORRECTLY)
+# 6. Direct In-Memory Metric Extraction
 # ==============================================================================
 set block [ord::get_db_block]
 set db_units [$block getDbUnitsPerMicron]

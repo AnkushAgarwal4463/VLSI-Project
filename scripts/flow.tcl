@@ -30,35 +30,45 @@ link_design "systolic_array"
 current_design "systolic_array"
 
 # ==============================================================================
-# 3. Dynamic Floorplan Calculation (FIXES 0.0 Cell Area & Missing site_name)
+# 3. Dynamic Floorplan Calculation (FIXES Unit Mismatch & GPL-0301)
 # ==============================================================================
 set total_cell_area 0.0
 
-# Use -hierarchical to safely catch all leaf standard cell instances across sub-modules
+# Extract standard cell area in um^2 across all hierarchical instances
 foreach inst [get_cells -hierarchical *] {
     if {![catch {get_property -quiet $inst lib_cell} cell_master] && $cell_master != ""} {
         set area [get_property -quiet $cell_master area]
-        if {$area != ""} {
+        if {$area != "" && $area > 0} {
             set total_cell_area [expr {$total_cell_area + $area}]
         }
     }
 }
 
-puts "\[INFO\] Total Standard Cell Area: ${total_cell_area} um^2"
+puts "\[INFO\] Extracted Netlist Standard Cell Area: ${total_cell_area} um^2"
 
-# Enforce a minimum standard cell area if netlist parsing yielded 0.0
-if {$total_cell_area == 0.0} {
-    puts "\[WARNING\] Cell area computed as 0.0 um^2. Using fallback core sizing."
-    set required_core_area 40000.0; # Default minimum core area (200um x 200um)
-} else {
-    set required_core_area [expr {$total_cell_area / $util_decimal}]
+# Safety Fallback: If area returns zero, estimate based on instance count
+if {$total_cell_area <= 0.0} {
+    set inst_count [llength [get_cells -hierarchical *]]
+    # Assume conservative average cell area of 12.0 um^2 per Sky130 HD gate
+    set total_cell_area [expr {$inst_count * 12.0}]
+    puts "\[WARNING\] Cell area extraction fallback used: ${total_cell_area} um^2 (${inst_count} instances)"
 }
 
+# Apply 1.15x (15%) physical layout buffer (for cell padding, tap cells, and site alignment)
+set buffered_cell_area [expr {$total_cell_area * 1.15}]
+
+# Calculate required core area based on target utilization
+set required_core_area [expr {$buffered_cell_area / $util_decimal}]
 set core_dim [expr {sqrt($required_core_area)}]
 
 # Sky130 HD site height is 2.72 um; snap core dimensions to site height multiples
 set site_height 2.72
 set core_dim_snapped [expr {ceil($core_dim / $site_height) * $site_height}]
+
+# Enforce a minimum core dimension of 150 um x 150 um
+if {$core_dim_snapped < 150.0} {
+    set core_dim_snapped 150.0
+}
 
 # Dynamic Margin scaled to site height alignment
 if {$UTIL >= 60} {
@@ -70,7 +80,7 @@ if {$UTIL >= 60} {
 }
 set core_margin [expr {ceil($raw_margin / $site_height) * $site_height}]
 
-# Calculate aligned die boundaries
+# Calculate aligned die & core boundaries
 set core_x0 $core_margin
 set core_y0 $core_margin
 set core_x1 [expr {$core_x0 + $core_dim_snapped}]
@@ -81,11 +91,16 @@ set die_y0 0.0
 set die_x1 [expr {$core_x1 + $core_margin}]
 set die_y1 [expr {$core_y1 + $core_margin}]
 
-puts "\[INFO\] Initializing Floorplan with Site Alignment:"
-puts "       Die  Area : $die_x0 $die_y0 $die_x1 $die_y1"
-puts "       Core Area : $core_x0 $core_y0 $core_x1 $core_y1"
+set actual_core_area [expr {($core_x1 - $core_x0) * ($core_y1 - $core_y0)}]
+set projected_util [expr {($total_cell_area / $actual_core_area) * 100.0}]
 
-# Safe multi-tier fallback for floorplan initialization
+puts "\[INFO\] Initializing Floorplan with Corrected Sizing:"
+puts "       Total Std Cell Area : ${total_cell_area} um^2"
+puts "       Actual Core Area    : ${actual_core_area} um^2"
+puts "       Projected Util (%)  : [format \"%.2f\" $projected_util]%"
+puts "       Die  Area           : $die_x0 $die_y0 $die_x1 $die_y1"
+puts "       Core Area           : $core_x0 $core_y0 $core_x1 $core_y1"
+
 if {![info exists site_name]} { set site_name "unithd" }
 
 if {[catch {

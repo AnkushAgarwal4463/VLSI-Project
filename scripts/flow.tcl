@@ -41,9 +41,9 @@ read_verilog $netlist_verilog
 link_design "systolic_array"
 
 # ==============================================================================
-# 4. Initialize Floorplan & Make Routing Tracks (Fix for 8000+ Pin Out-of-Bounds)
+# 4. Initialize Floorplan & Make Routing Tracks (PPL-0024 Floorplan Expansion)
 # ==============================================================================
-# For extremely high pin counts (8000+ IOs), increase core margin to expand die perimeter
+# For 8000+ pin count designs, expand core margin to enlarge the die perimeter.
 if {$UTIL >= 60} {
     set core_margin 35.0
 } elseif {$UTIL >= 40} {
@@ -59,8 +59,9 @@ initialize_floorplan \
     -core_space $core_margin \
     -site $site_name
 
-# Initialize routing grid tracks for pin placement and global routing
+# Generate routing tracks across all metal layers for pin grid snapping
 make_tracks
+
 # ==============================================================================
 # 5. Define Clock & Timing Constraints
 # ==============================================================================
@@ -75,7 +76,7 @@ if {[llength $in_ports] > 0} {
 set_output_delay -clock clk 0.2 [all_outputs]
 
 # ==============================================================================
-# 6. Global Placement, Pin Placement & Detailed Placement
+# 6. Global Placement, Multi-Layer Pin Placement & Detailed Placement
 # ==============================================================================
 puts "Running global placement..."
 if {$UTIL >= 60} {
@@ -88,17 +89,14 @@ puts "Running pin placement (Multi-layer allocation)..."
 set io_hor_layers [list met3 met5]
 set io_ver_layers [list met2 met4]
 
-# Configure pin constraints using valid OpenROAD syntax
-set_io_pin_constraint -direction * -spacing 1
-
-# Execute pin placement across multi-layer assignment
+# Native multi-layer placement using pure place_pins options
 if {[catch {
     place_pins -hor_layers $io_hor_layers \
                -ver_layers $io_ver_layers \
                -random
 } err]} {
-    puts "\[WARNING\] Standard pin placement failed: $err"
-    puts "\[INFO\] Retrying pin placement with annealing fallback..."
+    puts "\[WARNING\] Random pin placement failed: $err"
+    puts "\[INFO\] Retrying pin placement with annealing mode..."
     place_pins -hor_layers $io_hor_layers \
                -ver_layers $io_ver_layers \
                -annealing

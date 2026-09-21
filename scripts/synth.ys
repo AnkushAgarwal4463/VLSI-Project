@@ -17,8 +17,8 @@ techmap
 opt
 
 # Standard cell mapping using container Liberty file
-dfflibmap -liberty __LIB_FILE__
-abc -liberty __LIB_FILE__
+dfflibmap -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+abc -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
 opt
 clean
 

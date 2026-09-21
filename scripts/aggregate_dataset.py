@@ -4,21 +4,25 @@ import json
 import argparse
 import pandas as pd
 
-def aggregate_features(runs_dir="systolic_project/runs", output_csv="dataset/placement_dataset_real.csv"):
-    """Find all JSON feature files and aggregate them into a master CSV dataset."""
+def aggregate_features(runs_dir="downloaded_artifacts", output_csv="summary_output/systolic_array_sweep_dataset.csv"):
+    """Find all feature JSON files across workspace directories and aggregate them into a CSV."""
     
-    # 1. Search in specified directory first; fall back to downloaded_artifacts if missing
-    search_pattern = os.path.join(runs_dir, "**", "*_features.json")
-    json_files = glob.glob(search_pattern, recursive=True)
+    search_dirs = [runs_dir, "systolic_project/runs", "."]
+    json_files = []
 
-    if not json_files and os.path.exists("downloaded_artifacts"):
-        print("No feature files in primary runs_dir. Searching 'downloaded_artifacts'...")
-        search_pattern = os.path.join("downloaded_artifacts", "**", "*_features.json")
-        json_files = glob.glob(search_pattern, recursive=True)
+    for d in search_dirs:
+        if os.path.exists(d):
+            found = glob.glob(os.path.join(d, "**", "*_features.json"), recursive=True)
+            found += glob.glob(os.path.join(d, "*_features.json"))
+            json_files.extend(found)
+            
+    json_files = sorted(list(set(json_files)))
 
     if not json_files:
-        print(f"No feature JSON files found matching pattern: {search_pattern}")
-        return
+        print(f"[ERROR] No *_features.json files found across search directories: {search_dirs}")
+        exit(1)
+
+    print(f"[INFO] Found {len(json_files)} feature file(s) to process...")
 
     records = []
     for file_path in json_files:
@@ -27,53 +31,54 @@ def aggregate_features(runs_dir="systolic_project/runs", output_csv="dataset/pla
                 data = json.load(f)
                 records.append(data)
         except Exception as e:
-            print(f"Error reading {file_path}: {e}")
+            print(f"[WARNING] Error reading {file_path}: {e}")
+
+    if not records:
+        print("[ERROR] Failed to load any records from found JSON files.")
+        exit(1)
 
     df = pd.DataFrame(records)
 
-    # 2. Harmonize potential clock period column names
+    # Harmonize column names
     if "clk_period" in df.columns and "clk_period_ns" not in df.columns:
         df.rename(columns={"clk_period": "clk_period_ns"}, inplace=True)
 
-    # 3. Define exact priority column order
+    # Priority ordering for output CSV
     priority_cols = [
         "run_tag",
         "array_size",
         "data_width",
         "utilization",
         "clk_period_ns",
+        "num_cells",
+        "die_area_u2",
         "wirelength_u",
-        "total_gate_area",
-        "slack_ps",
-        "total_power_mw",
-        "routing_congested_nets"
+        "slack_ps"
     ]
 
-    # Reorder columns that exist and append any extra columns found
     existing_priority_cols = [col for col in priority_cols if col in df.columns]
     other_cols = [col for col in df.columns if col not in priority_cols]
     final_cols = existing_priority_cols + other_cols
 
     df = df[final_cols]
 
-    # 4. Sort dataset by design matrix parameters
-    sort_keys = [c for c in ["array_size", "data_width", "utilization", "clk_period_ns", "clk_period"] if c in df.columns]
+    # Sort rows systematically by sweep variables
+    sort_keys = [c for c in ["array_size", "data_width", "utilization", "clk_period_ns"] if c in df.columns]
     if sort_keys:
         df = df.sort_values(by=sort_keys).reset_index(drop=True)
 
-    # 5. Create destination output directory if missing
+    # Create destination folder if missing
     output_dir = os.path.dirname(output_csv)
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
     
-    # Save aggregated output CSV
     df.to_csv(output_csv, index=False)
-    print(f"Successfully aggregated {len(records)} run outputs into '{output_csv}'")
+    print(f"[SUCCESS] Successfully aggregated {len(records)} run outputs into '{output_csv}'")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Aggregate OpenROAD run feature JSONs into CSV.")
-    parser.add_argument("--runs_dir", default="systolic_project/runs", help="Directory to search for *_features.json files")
-    parser.add_argument("--output_csv", default="dataset/placement_dataset_real.csv", help="Path to output CSV file")
+    parser.add_argument("--runs_dir", default="downloaded_artifacts", help="Directory to search for *_features.json files")
+    parser.add_argument("--output_csv", default="summary_output/systolic_array_sweep_dataset.csv", help="Path to output CSV file")
     args = parser.parse_args()
 
     aggregate_features(runs_dir=args.runs_dir, output_csv=args.output_csv)

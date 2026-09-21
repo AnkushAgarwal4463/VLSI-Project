@@ -6,6 +6,7 @@ if {[info exists ::env(DATA_WIDTH)]} { set DATA_WIDTH $::env(DATA_WIDTH) } else 
 if {[info exists ::env(UTIL)]} { set UTIL $::env(UTIL) } else { set UTIL 50 }
 if {[info exists ::env(CLK_PERIOD)]} { set CLK_PERIOD $::env(CLK_PERIOD) } else { set CLK_PERIOD 5.0 }
 if {[info exists ::env(RUN_TAG)]} { set RUN_TAG $::env(RUN_TAG) } else { set RUN_TAG "run_test" }
+if {[info exists ::env(SITE)] && $::env(SITE) != ""} { set site_name $::env(SITE) } else { set site_name "unithd" }
 
 set util_decimal [expr {$UTIL / 100.0}]
 
@@ -29,20 +30,30 @@ link_design "systolic_array"
 current_design "systolic_array"
 
 # ==============================================================================
-# 3. Dynamic Floorplan Calculation (FIXES GPL-0130 & Alignment Errors)
+# 3. Dynamic Floorplan Calculation (FIXES 0.0 Cell Area & Missing site_name)
 # ==============================================================================
 set total_cell_area 0.0
-foreach inst [get_cells *] {
-    if {![catch {get_property $inst lib_cell} cell_master] && $cell_master != ""} {
-        set area [get_property $cell_master area]
-        set total_cell_area [expr {$total_cell_area + $area}]
+
+# Use -hierarchical to safely catch all leaf standard cell instances across sub-modules
+foreach inst [get_cells -hierarchical *] {
+    if {![catch {get_property -quiet $inst lib_cell} cell_master] && $cell_master != ""} {
+        set area [get_property -quiet $cell_master area]
+        if {$area != ""} {
+            set total_cell_area [expr {$total_cell_area + $area}]
+        }
     }
 }
 
 puts "\[INFO\] Total Standard Cell Area: ${total_cell_area} um^2"
 
-# Calculate required core area based on utilization
-set required_core_area [expr {$total_cell_area / $util_decimal}]
+# Enforce a minimum standard cell area if netlist parsing yielded 0.0
+if {$total_cell_area == 0.0} {
+    puts "\[WARNING\] Cell area computed as 0.0 um^2. Using fallback core sizing."
+    set required_core_area 40000.0; # Default minimum core area (200um x 200um)
+} else {
+    set required_core_area [expr {$total_cell_area / $util_decimal}]
+}
+
 set core_dim [expr {sqrt($required_core_area)}]
 
 # Sky130 HD site height is 2.72 um; snap core dimensions to site height multiples
@@ -74,7 +85,9 @@ puts "\[INFO\] Initializing Floorplan with Site Alignment:"
 puts "       Die  Area : $die_x0 $die_y0 $die_x1 $die_y1"
 puts "       Core Area : $core_x0 $core_y0 $core_x1 $core_y1"
 
-# Try user specified site name first; fall back to Sky130 default site 'unithd' / 'unit'
+# Safe multi-tier fallback for floorplan initialization
+if {![info exists site_name]} { set site_name "unithd" }
+
 if {[catch {
     initialize_floorplan \
         -die_area "$die_x0 $die_y0 $die_x1 $die_y1" \

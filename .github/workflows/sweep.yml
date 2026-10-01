@@ -123,7 +123,7 @@ jobs:
         run: |
           mkdir -p systolic_project/synth "systolic_project/runs/${RUN_TAG}"
           yosys -s scripts/synth.ys 2>&1 | tee "systolic_project/runs/${RUN_TAG}_synth_log.txt"
-          test -f systolic_project/synth/systolic_netlist.v
+          test -f systolic_project/synth/systolic_netlist.v 
 
       - name: Run OpenROAD flow
         timeout-minutes: 30

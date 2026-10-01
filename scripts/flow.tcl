@@ -3,12 +3,16 @@
 # ==============================================================================
 if {[info exists ::env(ARRAY_SIZE)]} { set ARRAY_SIZE $::env(ARRAY_SIZE) } else { set ARRAY_SIZE 4 }
 if {[info exists ::env(DATA_WIDTH)]} { set DATA_WIDTH $::env(DATA_WIDTH) } else { set DATA_WIDTH 8 }
-if {[info exists ::env(UTIL)]} { set UTIL $::env(UTIL) } else { set UTIL 50 }
+if {[info exists ::env(UTIL)]}       { set UTIL $::env(UTIL) }             else { set UTIL 50 }
 if {[info exists ::env(CLK_PERIOD)]} { set CLK_PERIOD $::env(CLK_PERIOD) } else { set CLK_PERIOD 5.0 }
-if {[info exists ::env(RUN_TAG)]} { set RUN_TAG $::env(RUN_TAG) } else { set RUN_TAG "run_test" }
+if {[info exists ::env(RUN_TAG)]}    { set RUN_TAG $::env(RUN_TAG) }       else { set RUN_TAG "run_test" }
 if {[info exists ::env(SITE)] && $::env(SITE) != ""} { set site_name $::env(SITE) } else { set site_name "unithd" }
 
 set util_decimal [expr {$UTIL / 100.0}]
+
+# Set execution run directory
+set run_dir "systolic_project/runs/$RUN_TAG"
+file mkdir $run_dir
 
 # ==============================================================================
 # 2. Read Tech LEFs, Liberty & Netlist
@@ -24,13 +28,13 @@ read_lef $tech_lef
 read_lef $std_cell_lef
 read_verilog $netlist_verilog
 
-# FIX: Explicitly link design AND set current design context
+# Explicitly link design AND set current design context
 puts "\[INFO\] Linking design systolic_array..."
 link_design "systolic_array"
 current_design "systolic_array"
 
 # ==============================================================================
-# 3. Dynamic Floorplan Calculation (FIXES Unit Mismatch & GPL-0301)
+# 3. Dynamic Floorplan Calculation
 # ==============================================================================
 set total_cell_area 0.0
 
@@ -94,14 +98,12 @@ set die_y1 [expr {$core_y1 + $core_margin}]
 set actual_core_area [expr {($core_x1 - $core_x0) * ($core_y1 - $core_y0)}]
 set projected_util [expr {($total_cell_area / $actual_core_area) * 100.0}]
 
-puts "\[INFO\] Initializing Floorplan with Corrected Sizing:"
+puts "\[INFO\] Initializing Floorplan:"
 puts "       Total Std Cell Area : ${total_cell_area} um^2"
 puts "       Actual Core Area    : ${actual_core_area} um^2"
 puts "       Projected Util (%)  : [format \"%.2f\" $projected_util]%"
 puts "       Die  Area           : $die_x0 $die_y0 $die_x1 $die_y1"
 puts "       Core Area           : $core_x0 $core_y0 $core_x1 $core_y1"
-
-if {![info exists site_name]} { set site_name "unithd" }
 
 if {[catch {
     initialize_floorplan \
@@ -164,7 +166,7 @@ detailed_placement
 check_placement
 
 # ==============================================================================
-# 5b. Design & Timing Repair (Fixes Negative Slack / WNS)
+# 6. Design & Timing Repair
 # ==============================================================================
 puts "\[INFO\] Running design repair (slew, load, fanout)..."
 repair_design
@@ -177,111 +179,15 @@ detailed_placement
 check_placement
 
 # ==============================================================================
-# 5c. Global Routing & In-Memory Metric Extraction
+# 7. Global Routing & Final Database Saving
 # ==============================================================================
-set run_dir "systolic_project/runs/$RUN_TAG"
-file mkdir $run_dir
-
-puts "\[INFO\] Running global routing for wirelength estimation..."
+puts "\[INFO\] Running global routing..."
 if {[catch {
     global_route -guide_file "${run_dir}/route.guide" \
                  -congestion_iterations 100
 } err]} {
     puts "\[WARNING\] global_route failed: $err"
 }
-
-# ==============================================================================
-# 6. Direct In-Memory Metric Extraction
-# ==============================================================================
-set block [ord::get_db_block]
-set db_units [$block getDbUnitsPerMicron]
-
-# 1. Precise Die Area
-set die_box [$block getDieArea]
-set die_w [expr {([$die_box xMax] - [$die_box xMin]) / double($db_units)}]
-set die_h [expr {([$die_box yMax] - [$die_box yMin]) / double($db_units)}]
-set die_area_u2 [expr {$die_w * $die_h}]
-
-# 2. Total Cell Count
-set num_cells [llength [get_cells *]]
-
-# 3. Worst Negative Slack (WNS in ps)
-set wns_val [sta::worst_slack -max]
-if {$wns_val == "" || $wns_val == "INF"} {
-    set slack_ps 0.0
-} else {
-    set slack_ps [expr {$wns_val * 1000.0}]
-}
-
-# ==============================================================================
-# 4. Robust Wirelength Extraction
-# ==============================================================================
-set total_wirelength_u 0.0
-set wl_report_file "${run_dir}/wirelength.rpt"
-
-# Fix: Use 'redirect' because report_wire_length lacks a native -file flag
-if {[catch {
-    redirect $wl_report_file { report_wire_length -global_route }
-} err]} {
-    puts "\[WARNING\] Redirection failed: $err"
-}
-
-# Parse generated report file if present
-if {[file exists $wl_report_file]} {
-    set fh [open $wl_report_file "r"]
-    set content [read $fh]
-    close $fh
-
-    # Pattern 1: Total wire length = <val>
-    if {[regexp -nocase {total\s+wire\s+length\s*[:=]\s*([0-9\.eE\+-]+)} $content -> total_wl]} {
-        set total_wirelength_u $total_wl
-    # Pattern 2: Total <val> (at beginning of line or end of table)
-    } elseif {[regexp -nocase -line {^total\s+([0-9\.eE\+-]+)} $content -> total_wl]} {
-        set total_wirelength_u $total_wl
-    # Pattern 3: Line-by-line scanning for last numeric token on summary line
-    } else {
-        set lines [split $content "\n"]
-        foreach line $lines {
-            if {[regexp -nocase {total} $line]} {
-                set tokens [regexp -all -inline {[0-9\.eE\+-]+} $line]
-                if {[llength $tokens] > 0} {
-                    set total_wirelength_u [lindex $tokens end]
-                }
-            }
-        }
-    }
-}
-
-# In-Memory C++ API Fallback (Guarantees non-zero value if routing exists)
-if {$total_wirelength_u == 0.0} {
-    puts "\[INFO\] File parsing returned 0.0. Querying OpenROAD database API..."
-    if {![catch {set total_wirelength_u [groute_wire_length]}]} {
-        puts "\[INFO\] Extracted via groute_wire_length: ${total_wirelength_u} um"
-    } else {
-        puts "\[WARNING\] Database wirelength retrieval failed. Is global_route complete?"
-    }
-} else {
-    puts "\[INFO\] Extracted Wirelength: ${total_wirelength_u} um"
-}
-# Write metrics directly to JSON file
-set json_file "systolic_project/runs/${RUN_TAG}_features.json"
-file mkdir "systolic_project/runs"
-set fh [open $json_file "w"]
-
-puts $fh "{"
-puts $fh "  \"run_tag\": \"$RUN_TAG\","
-puts $fh "  \"array_size\": $ARRAY_SIZE,"
-puts $fh "  \"data_width\": $DATA_WIDTH,"
-puts $fh "  \"utilization\": $UTIL,"
-puts $fh "  \"clk_period_ns\": $CLK_PERIOD,"
-puts $fh "  \"num_cells\": $num_cells,"
-puts $fh "  \"die_area_u2\": [format "%.2f" $die_area_u2],"
-puts $fh "  \"wirelength_u\": [format "%.2f" $total_wirelength_u],"
-puts $fh "  \"slack_ps\": [format "%.2f" $slack_ps]"
-puts $fh "}"
-close $fh
-
-puts "\[SUCCESS\] Extracted metrics directly to $json_file"
 
 # Save ODB database
 write_db "${run_dir}/final.odb"

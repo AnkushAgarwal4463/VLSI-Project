@@ -121,11 +121,8 @@ jobs:
       - name: Synthesize
         timeout-minutes: 10
         run: |
-          mkdir -p systolic_project/synth systolic_project/runs
-          cp scripts/synth.ys scripts/synth_run.ys
-          sed -i "s/__ARRAY_SIZE__/${ARRAY_SIZE}/g" scripts/synth_run.ys
-          sed -i "s/__DATA_WIDTH__/${DATA_WIDTH}/g" scripts/synth_run.ys
-          yosys -s scripts/synth_run.ys 2>&1 | tee systolic_project/synth/synth_log.txt
+          mkdir -p systolic_project/synth "systolic_project/runs/${RUN_TAG}"
+          yosys -s scripts/synth.ys 2>&1 | tee "systolic_project/runs/${RUN_TAG}_synth_log.txt"
           test -f systolic_project/synth/systolic_netlist.v
 
       - name: Run OpenROAD flow

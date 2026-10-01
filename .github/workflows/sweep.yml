@@ -153,10 +153,24 @@ jobs:
         if: always()
         run: |
           echo "### Run Summary for ${{ env.RUN_TAG }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Netlist produced: $(test -f systolic_project/synth/systolic_netlist.v && echo YES \vert{}\vert{} echo NO)" >> $GITHUB_STEP_SUMMARY
-          echo "- final.odb produced: $(test -f systolic_project/runs/${RUN_TAG}/final.odb && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
-          echo "- Features JSON produced: $(test -f systolic_project/runs/${RUN_TAG}_features.json && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "systolic_project/synth/systolic_netlist.v" ]; then
+            echo "- Netlist produced: YES" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Netlist produced: NO" >> $GITHUB_STEP_SUMMARY
+          fi
 
+          if [ -f "systolic_project/runs/${RUN_TAG}/final.odb" ]; then
+            echo "- final.odb produced: YES" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- final.odb produced: NO" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ -f "systolic_project/runs/${RUN_TAG}_features.json" ]; then
+            echo "- Features JSON produced: YES" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Features JSON produced: NO" >> $GITHUB_STEP_SUMMARY
+          fi
   # ====================================================================
   # JOB 3: Aggregate Results into Dataset CSV
   # ====================================================================

@@ -9,30 +9,31 @@
 `endif
 
 module pe #(
-    parameter WIDTH = `PE_DATA_WIDTH
+    parameter integer WIDTH = `PE_DATA_WIDTH
 ) (
     input  wire                 clk,
     input  wire                 rst_n,
-    input  wire  [WIDTH-1:0]    a_in,
-    input  wire  [WIDTH-1:0]    b_in,
-    output logic [WIDTH-1:0]    a_out,
-    output logic [WIDTH-1:0]    b_out,
-    output logic [2*WIDTH-1:0]  acc_out
+    input  wire [WIDTH-1:0]     a_in,
+    input  wire [WIDTH-1:0]     b_in,
+    output reg  [WIDTH-1:0]     a_out,
+    output reg  [WIDTH-1:0]     b_out,
+    output reg  [(2*WIDTH)-1:0] acc_out
 );
 
-    // Explicit combinational multiply intermediate to assist Yosys logic mapping
-    logic [2*WIDTH-1:0] mult_prod;
+    // Guard parameter against underflow during expression evaluation
+    localparam integer ACC_WIDTH = (WIDTH > 0) ? (2 * WIDTH) : 2;
 
-    always_comb begin
-        mult_prod = a_in * b_in;
-    end
+    // Intermediate multiplication wire
+    wire [ACC_WIDTH-1:0] mult_prod;
+
+    assign mult_prod = $unsigned(a_in) * $unsigned(b_in);
 
     // Synchronous Pipeline & Accumulation Logic
-    always_ff @(posedge clk or negedge rst_n) begin
+    always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            a_out   <= '0;
-            b_out   <= '0;
-            acc_out <= '0;
+            a_out   <= {WIDTH{1'b0}};
+            b_out   <= {WIDTH{1'b0}};
+            acc_out <= {ACC_WIDTH{1'b0}};
         end else begin
             a_out   <= a_in;
             b_out   <= b_in;

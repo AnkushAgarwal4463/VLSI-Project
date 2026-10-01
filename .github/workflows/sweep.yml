@@ -94,8 +94,17 @@ jobs:
         run: |
           set -euo pipefail
           curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+          
+          # Configure network retries and timeouts for mamba
+          ./bin/micromamba config set connect_timeout 60 --prefix ./conda-env || true
+          ./bin/micromamba config set read_timeout_secs 120 --prefix ./conda-env || true
+          ./bin/micromamba config set max_retries 5 --prefix ./conda-env || true
+
+          # Create environment using the litex-hub channel mirror
           ./bin/micromamba create --yes --prefix ./conda-env \
-            --channel litex-hub --channel main \
+            --channel https://conda.anaconda.org/litex-hub \
+            --channel conda-forge \
+            --channel main \
             open_pdks.sky130a openroad yosys
 
       - name: Add toolchain to PATH

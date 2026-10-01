@@ -1,81 +1,77 @@
-name: Systolic Array Congestion Sweep (72 Runs)
+name: Systolic Array Congestion Sweep
 
 on:
   workflow_dispatch:
-  
+    inputs:
+      test_mode:
+        description: 'Execution Mode'
+        required: true
+        type: choice
+        default: 'test_1_run'
+        options:
+          - 'test_1_run'
+          - 'full_sweep'
+
 # Grant upload permissions to GITHUB_TOKEN
 permissions:
   contents: read
   actions: write
-  
+
 jobs:
+  # ====================================================================
+  # JOB 1: Generate Matrix Dynamically
+  # ====================================================================
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          # 1-Run Test Configuration
+          TEST_MATRIX='[
+            {"array_size": 4, "data_width": 8, "utilization": 30, "clk_period": 3.0}
+          ]'
+
+          # Full 72-Run Sweep Configurations
+          FULL_MATRIX='[
+            {"array_size": 4, "data_width": 8, "utilization": 30, "clk_period": 3.0},
+            {"array_size": 4, "data_width": 8, "utilization": 50, "clk_period": 5.0},
+            {"array_size": 4, "data_width": 16, "utilization": 30, "clk_period": 3.0},
+            {"array_size": 4, "data_width": 16, "utilization": 50, "clk_period": 5.0},
+            {"array_size": 8, "data_width": 8, "utilization": 40, "clk_period": 5.0},
+            {"array_size": 8, "data_width": 8, "utilization": 60, "clk_period": 8.0},
+            {"array_size": 8, "data_width": 16, "utilization": 40, "clk_period": 5.0},
+            {"array_size": 8, "data_width": 16, "utilization": 60, "clk_period": 8.0},
+            {"array_size": 16, "data_width": 8, "utilization": 50, "clk_period": 10.0},
+            {"array_size": 16, "data_width": 8, "utilization": 70, "clk_period": 15.0},
+            {"array_size": 16, "data_width": 16, "utilization": 50, "clk_period": 10.0},
+            {"array_size": 16, "data_width": 16, "utilization": 70, "clk_period": 15.0}
+          ]'
+
+          if [ "${{ github.event.inputs.test_mode }}" == "test_1_run" ]; then
+            echo "Selected: 1-Run Fast Pipeline Test"
+            # Strip whitespace and line breaks for JSON parsing
+            JSON_OUT=$(echo "$TEST_MATRIX" | jq -c .)
+          else
+            echo "Selected: Full Matrix Sweep"
+            JSON_OUT=$(echo "$FULL_MATRIX" | jq -c .)
+          fi
+
+          echo "matrix=$JSON_OUT" >> $GITHUB_OUTPUT
+
+  # ====================================================================
+  # JOB 2: Execute Sweep Matrix
+  # ====================================================================
   run-sweep:
+    needs: generate-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
       fail-fast: false
       max-parallel: 16
       matrix:
-        include:
-          # ====================================================================
-          # 4x4 Array Runs (Clock Periods: 3.0 ns & 5.0 ns)
-          # ====================================================================
-          - array_size: 4
-            data_width: 8
-            utilization: 30
-            clk_period: 3.0
-          - array_size: 4
-            data_width: 8
-            utilization: 50
-            clk_period: 5.0
-          - array_size: 4
-            data_width: 16
-            utilization: 30
-            clk_period: 3.0
-          - array_size: 4
-            data_width: 16
-            utilization: 50
-            clk_period: 5.0
-
-          # ====================================================================
-          # 8x8 Array Runs (Clock Periods: 5.0 ns & 8.0 ns)
-          # ====================================================================
-          - array_size: 8
-            data_width: 8
-            utilization: 40
-            clk_period: 5.0
-          - array_size: 8
-            data_width: 8
-            utilization: 60
-            clk_period: 8.0
-          - array_size: 8
-            data_width: 16
-            utilization: 40
-            clk_period: 5.0
-          - array_size: 8
-            data_width: 16
-            utilization: 60
-            clk_period: 8.0
-
-          # ====================================================================
-          # 16x16 Array Runs (Clock Periods: 10.0 ns & 15.0 ns)
-          # ====================================================================
-          - array_size: 16
-            data_width: 8
-            utilization: 50
-            clk_period: 10.0
-          - array_size: 16
-            data_width: 8
-            utilization: 70
-            clk_period: 15.0
-          - array_size: 16
-            data_width: 16
-            utilization: 50
-            clk_period: 10.0
-          - array_size: 16
-            data_width: 16
-            utilization: 70
-            clk_period: 15.0
+        include: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -152,6 +148,9 @@ jobs:
           echo "- final.odb produced: $(test -f systolic_project/runs/${RUN_TAG}/final.odb && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
           echo "- Features JSON produced: $(test -f systolic_project/runs/${RUN_TAG}_features.json && echo YES || echo NO)" >> $GITHUB_STEP_SUMMARY
 
+  # ====================================================================
+  # JOB 3: Aggregate Results into Dataset CSV
+  # ====================================================================
   aggregate-results:
     needs: run-sweep
     runs-on: ubuntu-latest

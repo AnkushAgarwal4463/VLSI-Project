@@ -1,21 +1,17 @@
-# Read SystemVerilog files with parameters defined prior to elaboration
-if {[info exists ::env(ARRAY_SIZE)]} { set ARRAY_SIZE $::env(ARRAY_SIZE) } else { set ARRAY_SIZE 4 }
-if {[info exists ::env(DATA_WIDTH)]} { set DATA_WIDTH $::env(DATA_WIDTH) } else { set DATA_WIDTH 8 }
-if {[info exists ::env(RUN_TAG)]}    { set RUN_TAG $::env(RUN_TAG) }       else { set RUN_TAG "run_test" }
+# Ensure output directories exist
+exec mkdir -p systolic_project/synth
+exec mkdir -p "systolic_project/runs/$env(RUN_TAG)"
 
-set lib_file "./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib"
+setenv LIB_FILE "./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib"
 
-# Ensure output directories exist before writing
-file mkdir "systolic_project/synth"
-file mkdir "systolic_project/runs/${RUN_TAG}"
+# Read SystemVerilog files passing parameter defines directly from OS environment
+read_verilog -sv -DARRAY_SIZE=$env(ARRAY_SIZE) -DDATA_WIDTH=$env(DATA_WIDTH) rtl/pe.v
+read_verilog -sv -DARRAY_SIZE=$env(ARRAY_SIZE) -DDATA_WIDTH=$env(DATA_WIDTH) rtl/systolic_array.v
 
-read_verilog -sv -DARRAY_SIZE=${ARRAY_SIZE} -DDATA_WIDTH=${DATA_WIDTH} rtl/pe.v
-read_verilog -sv -DARRAY_SIZE=${ARRAY_SIZE} -DDATA_WIDTH=${DATA_WIDTH} rtl/systolic_array.v
-
-# Pure top-level elaboration
+# Top-level elaboration
 hierarchy -top systolic_array
 
-# Standard synthesis & optimization
+# Standard synthesis & optimization flow
 proc
 flatten
 opt
@@ -26,12 +22,12 @@ opt
 techmap
 opt
 
-# Standard cell mapping using container Liberty file
-dfflibmap -liberty $lib_file
-abc -liberty $lib_file
+# Standard cell mapping using Sky130 HD Liberty file
+dfflibmap -liberty $env(LIB_FILE)
+abc -liberty $env(LIB_FILE)
 opt
 clean
 
 # Output gate-level netlist and area stats
 write_verilog -noattr systolic_project/synth/systolic_netlist.v
-tee -o "systolic_project/runs/${RUN_TAG}/yosys_synth_area.rpt" stat -liberty $lib_file
+tee -o "systolic_project/runs/$env(RUN_TAG)/yosys_synth_area.rpt" stat -liberty $env(LIB_FILE)

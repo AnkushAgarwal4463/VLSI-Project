@@ -1,31 +1,36 @@
 // systolic_array.v -- Parameterized NxN Systolic Array Grid
 `default_nettype none
 
-`ifndef ARRAY_SIZE
-  `define ARRAY_SIZE 4
+// Safe macro definitions with fallbacks
+`ifdef ARRAY_SIZE
+  `define SA_ARRAY_SIZE `ARRAY_SIZE
+`else
+  `define SA_ARRAY_SIZE 4
 `endif
 
-`ifndef DATA_WIDTH
-  `define DATA_WIDTH 8
+`ifdef DATA_WIDTH
+  `define SA_DATA_WIDTH `DATA_WIDTH
+`else
+  `define SA_DATA_WIDTH 8
 `endif
 
 module systolic_array #(
-    parameter N     = `ARRAY_SIZE,
-    parameter WIDTH = `DATA_WIDTH
+    parameter N     = `SA_ARRAY_SIZE,
+    parameter WIDTH = `SA_DATA_WIDTH
 ) (
-    input  wire                     clk,
-    input  wire                     rst_n,
-    input  wire [N*WIDTH-1:0]       a_edge_in,
-    input  wire [N*WIDTH-1:0]       b_edge_in,
-    output wire [N*N*2*WIDTH-1:0]   acc_flat
+    input  wire                      clk,
+    input  wire                      rst_n,
+    input  wire [N*WIDTH-1:0]        a_edge_in,
+    input  wire [N*WIDTH-1:0]        b_edge_in,
+    output wire [N*N*2*WIDTH-1:0]    acc_flat
 );
 
-    // Internal 2D interconnect arrays
+    // Internal 2D interconnect wire arrays
     wire [WIDTH-1:0]   a_wire   [0:N-1][0:N];
     wire [WIDTH-1:0]   b_wire   [0:N][0:N-1];
     wire [2*WIDTH-1:0] acc_wire [0:N-1][0:N-1];
 
-    // Connect top and left boundary inputs
+    // Connect boundary inputs
     genvar r, c;
     generate
         for (r = 0; r < N; r = r + 1) begin : g_row_edge
@@ -36,7 +41,7 @@ module systolic_array #(
             assign b_wire[0][c] = b_edge_in[c*WIDTH +: WIDTH];
         end
 
-        // Instantiate Processing Element (PE) matrix
+        // Instantiate 2D Processing Element (PE) matrix
         for (r = 0; r < N; r = r + 1) begin : g_row
             for (c = 0; c < N; c = c + 1) begin : g_col
                 pe #(
@@ -51,7 +56,7 @@ module systolic_array #(
                     .acc_out (acc_wire[r][c])
                 );
 
-                // Flatten accumulated output matrix into 1D output bus
+                // Flatten accumulated matrix outputs into 1D output bus
                 assign acc_flat[(r*N + c)*2*WIDTH +: 2*WIDTH] = acc_wire[r][c];
             end
         end

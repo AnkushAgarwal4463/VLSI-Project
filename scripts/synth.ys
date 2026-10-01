@@ -1,11 +1,11 @@
-# Read SystemVerilog files using environment variables
-read_verilog -sv -DARRAY_SIZE=$env(ARRAY_SIZE) -DDATA_WIDTH=$env(DATA_WIDTH) rtl/pe.v
-read_verilog -sv -DARRAY_SIZE=$env(ARRAY_SIZE) -DDATA_WIDTH=$env(DATA_WIDTH) rtl/systolic_array.v
+# Read SystemVerilog files, expanding environment variables using "$::env(...)"
+read_verilog -sv -DARRAY_SIZE="$::env(ARRAY_SIZE)" -DDATA_WIDTH="$::env(DATA_WIDTH)" rtl/pe.v
+read_verilog -sv -DARRAY_SIZE="$::env(ARRAY_SIZE)" -DDATA_WIDTH="$::env(DATA_WIDTH)" rtl/systolic_array.v
 
 # Top-level elaboration
 hierarchy -top systolic_array
 
-# Optimization flow
+# Standard synthesis & optimization flow
 proc
 flatten
 opt
@@ -16,12 +16,12 @@ opt
 techmap
 opt
 
-# Technology mapping
-dfflibmap -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
-abc -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+# Standard cell mapping using Sky130 HD Liberty file
+dfflibmap -liberty "$::env(LIB_FILE)"
+abc -liberty "$::env(LIB_FILE)"
 opt
 clean
 
-# Write outputs
+# Output gate-level netlist and area stats
 write_verilog -noattr systolic_project/synth/systolic_netlist.v
-tee -o "systolic_project/runs/$env(RUN_TAG)/yosys_synth_area.rpt" stat -liberty ./conda-env/share/pdk/sky130A/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+tee -o "systolic_project/runs/$::env(RUN_TAG)/yosys_synth_area.rpt" stat -liberty "$::env(LIB_FILE)"

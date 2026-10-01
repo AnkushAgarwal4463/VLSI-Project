@@ -1,11 +1,14 @@
-# Read SystemVerilog files, expanding environment variables using "$::env(...)"
-read_verilog -sv -DARRAY_SIZE="$::env(ARRAY_SIZE)" -DDATA_WIDTH="$::env(DATA_WIDTH)" rtl/pe.v
-read_verilog -sv -DARRAY_SIZE="$::env(ARRAY_SIZE)" -DDATA_WIDTH="$::env(DATA_WIDTH)" rtl/systolic_array.v
+# Create target run directory if it does not exist
+exec mkdir -p "systolic_project/runs/$ENV{RUN_TAG}"
 
-# Top-level elaboration
+# Read SystemVerilog RTL files with environment variable macro overrides
+read_verilog -sv -DARRAY_SIZE=$ENV{ARRAY_SIZE} -DDATA_WIDTH=$ENV{DATA_WIDTH} rtl/pe.v
+read_verilog -sv -DARRAY_SIZE=$ENV{ARRAY_SIZE} -DDATA_WIDTH=$ENV{DATA_WIDTH} rtl/systolic_array.v
+
+# Top-level elaboration & generic netlist building
 hierarchy -top systolic_array
 
-# Standard synthesis & optimization flow
+# High-level synthesis passes
 proc
 flatten
 opt
@@ -16,12 +19,15 @@ opt
 techmap
 opt
 
-# Standard cell mapping using Sky130 HD Liberty file
-dfflibmap -liberty "$::env(LIB_FILE)"
-abc -liberty "$::env(LIB_FILE)"
+# Standard cell mapping targeting Sky130 HD Liberty
+dfflibmap -liberty $ENV{LIB_FILE}
+abc -liberty $ENV{LIB_FILE}
 opt
 clean
 
-# Output gate-level netlist and area stats
+# Ensure output synthesis directory exists & write gate-level netlist
+exec mkdir -p systolic_project/synth
 write_verilog -noattr systolic_project/synth/systolic_netlist.v
-tee -o "systolic_project/runs/$::env(RUN_TAG)/yosys_synth_area.rpt" stat -liberty "$::env(LIB_FILE)"
+
+# Log area report
+tee -o "systolic_project/runs/$ENV{RUN_TAG}/yosys_synth_area.rpt" stat -liberty $ENV{LIB_FILE}

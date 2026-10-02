@@ -532,7 +532,7 @@ jobs:
         uses: actions/checkout@v4
 
 
-      # --------------------------------------------------------------
+            # --------------------------------------------------------------
       # Cache
       # --------------------------------------------------------------
       - name: Cache Conda Toolchain
@@ -540,7 +540,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ./conda-env
-          key: ${{ runner.os }}-condapdk-v4-diskfix
+          key: ${{ runner.os }}-condapdk-v5-sky130
 
 
       # --------------------------------------------------------------
@@ -575,15 +575,6 @@ jobs:
           curl -Ls \
             https://micro.mamba.pm/api/micromamba/linux-64/latest \
             | tar -xvj bin/micromamba
-
-          ./bin/micromamba config set connect_timeout 60 \
-            --prefix ./conda-env || true
-
-          ./bin/micromamba config set read_timeout_secs 120 \
-            --prefix ./conda-env || true
-
-          ./bin/micromamba config set max_retries 5 \
-            --prefix ./conda-env || true
 
           ./bin/micromamba create \
             --yes \
@@ -629,20 +620,44 @@ jobs:
 
           set -euo pipefail
 
-          LIB=$(find "$PWD/conda-env" \
-            -type f \
-            -name "sky130_fd_sc_hd__tt_025C_5v00.lib" \
-            | head -n 1)
+          echo "Searching for SKY130 Liberty file..."
+
+          LIB=$(find ./conda-env -type f \
+            \( -name "sky130_fd_sc_hd__tt_025C_5v00.lib" \
+               -o -name "sky130_fd_sc_hd__tt_025C_5v00.lib.gz" \
+               -o -name "sky130_fd_sc_hd*.lib" \
+               -o -name "sky130_fd_sc_hd*.lib.gz" \) \
+            -print | head -n 1)
 
           if [ -z "$LIB" ]; then
-            echo "ERROR: Liberty file not found."
+            echo "ERROR: SKY130 Liberty file not found."
+
+            echo "Available SKY130 files:"
+            find ./conda-env -type f \
+              | grep -i sky130 \
+              | head -100 || true
+
             exit 1
           fi
 
-          echo "LIB_FILE=$LIB" >> "$GITHUB_ENV"
+          echo "Found Liberty:"
+          echo "$LIB"
+
+          if [[ "$LIB" == *.lib.gz ]]; then
+            echo "Liberty is compressed."
+            echo "Decompressing..."
+
+            gunzip -k "$LIB"
+
+            LIB="${LIB%.gz}"
+          fi
+
+          test -f "$LIB"
 
           echo "Using Liberty:"
           echo "$LIB"
+
+          echo "LIB_FILE=$LIB" >> "$GITHUB_ENV"
 
 
       # --------------------------------------------------------------
@@ -660,6 +675,7 @@ jobs:
           echo "UTIL       = $UTIL"
           echo "CLK_PERIOD = $CLK_PERIOD"
           echo "RUN_TAG    = $RUN_TAG"
+          echo "LIB_FILE   = $LIB_FILE"
           echo "======================================"
 
           command -v yosys

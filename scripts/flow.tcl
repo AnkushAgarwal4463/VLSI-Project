@@ -239,7 +239,19 @@ set die_y1 \
     [expr {$core_y1 + $core_margin}]
     
 puts "===== AVAILABLE SITES ====="
-exec grep -n "^SITE " $std_cell_lef | head -20
+
+set lef_fp [open $std_cell_lef r]
+set lef_data [read $lef_fp]
+close $lef_fp
+
+foreach line [split $lef_data "\n"] {
+    if {[string match "SITE *" [string trim $line]]} {
+        puts $line
+    }
+}
+
+puts "==========================="
+
 puts "==========================="
 
 initialize_floorplan \

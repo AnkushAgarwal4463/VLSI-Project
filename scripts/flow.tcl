@@ -1,9 +1,19 @@
-```tcl
 # ==============================================================================
 # Systolic Array OpenROAD Physical Design Flow
+#
+# Technology : SKY130A
+# Standard cells : sky130_fd_sc_hd
+#
+# Outputs per run:
+#   final.odb
+#   route.guide
+#   timing_setup.rpt
+#   timing_hold.rpt
+#   wire_length.rpt
+#   route_status.rpt
+#   placement.rpt
 # ==============================================================================
 
-set ::env(TCL_LIBRARY) ""
 
 # ==============================================================================
 # 1. Read Environment Variables
@@ -45,9 +55,10 @@ if {[info exists ::env(SITE)] && $::env(SITE) != ""} {
     set site_name "unithd"
 }
 
-# ------------------------------------------------------------------------------
-# Convert utilization percentage to decimal
-# ------------------------------------------------------------------------------
+
+# ==============================================================================
+# 2. Validate Parameters
+# ==============================================================================
 
 set util_decimal [expr {$UTIL / 100.0}]
 
@@ -56,8 +67,24 @@ if {$util_decimal <= 0.0 || $util_decimal >= 1.0} {
     exit 1
 }
 
+if {$CLK_PERIOD <= 0.0} {
+    puts "\[ERROR\] Invalid clock period: $CLK_PERIOD"
+    exit 1
+}
+
+if {$ARRAY_SIZE <= 0} {
+    puts "\[ERROR\] Invalid array size: $ARRAY_SIZE"
+    exit 1
+}
+
+if {$DATA_WIDTH <= 0} {
+    puts "\[ERROR\] Invalid data width: $DATA_WIDTH"
+    exit 1
+}
+
+
 # ==============================================================================
-# 2. Run Directory
+# 3. Run Directory
 # ==============================================================================
 
 set run_dir "systolic_project/runs/$RUN_TAG"
@@ -65,7 +92,7 @@ set run_dir "systolic_project/runs/$RUN_TAG"
 file mkdir $run_dir
 
 puts "=============================================================="
-puts "\[INFO\] Run configuration"
+puts "\[INFO\] Systolic Array OpenROAD Flow"
 puts "=============================================================="
 puts "ARRAY_SIZE : $ARRAY_SIZE"
 puts "DATA_WIDTH : $DATA_WIDTH"
@@ -78,7 +105,7 @@ puts "=============================================================="
 
 
 # ==============================================================================
-# 3. SKY130 Technology Files
+# 4. SKY130 Technology Files
 # ==============================================================================
 
 set pdk_dir "./conda-env/share/pdk/sky130A"
@@ -89,17 +116,27 @@ set tech_lef \
 set std_cell_lef \
     "${pdk_dir}/libs.ref/sky130_fd_sc_hd/lef/sky130_fd_sc_hd.lef"
 
-# IMPORTANT:
-# This must match the Liberty used during Yosys synthesis.
-set lib_file \
-    "${pdk_dir}/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_5v00.lib"
+# ------------------------------------------------------------------------------
+# Use the same Liberty file selected by GitHub Actions/Yosys whenever possible.
+# This prevents synthesis and OpenROAD from using different timing libraries.
+# ------------------------------------------------------------------------------
+
+if {[info exists ::env(LIB_FILE)] && $::env(LIB_FILE) != ""} {
+
+    set lib_file $::env(LIB_FILE)
+
+} else {
+
+    set lib_file \
+        "${pdk_dir}/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_5v00.lib"
+}
 
 set netlist_verilog \
     "systolic_project/synth/systolic_netlist.v"
 
 
 # ==============================================================================
-# 4. Verify Required Files
+# 5. Verify Required Files
 # ==============================================================================
 
 puts "\[INFO\] Checking technology files..."
@@ -129,10 +166,12 @@ if {![file exists $netlist_verilog]} {
 }
 
 puts "\[INFO\] Technology files verified."
+puts "\[INFO\] Liberty:"
+puts "         $lib_file"
 
 
 # ==============================================================================
-# 5. Read Technology and Netlist
+# 6. Read Technology and Netlist
 # ==============================================================================
 
 puts "\[INFO\] Reading Liberty..."
@@ -149,7 +188,7 @@ read_verilog $netlist_verilog
 
 
 # ==============================================================================
-# 6. Link Design
+# 7. Link Design
 # ==============================================================================
 
 puts "\[INFO\] Linking design systolic_array..."
@@ -162,7 +201,7 @@ puts "\[INFO\] Design linked successfully."
 
 
 # ==============================================================================
-# 7. Calculate Cell Area
+# 8. Calculate Standard-Cell Area
 # ==============================================================================
 
 set total_cell_area 0.0
@@ -178,6 +217,7 @@ foreach inst [get_cells -hierarchical *] {
             set area [get_property -quiet $cell_master area]
 
             if {$area != "" && $area > 0} {
+
                 set total_cell_area \
                     [expr {$total_cell_area + $area}]
             }
@@ -190,30 +230,32 @@ puts "         ${total_cell_area} um^2"
 
 
 # ==============================================================================
-# 8. Area Fallback
+# 9. Area Fallback
 # ==============================================================================
 
 if {$total_cell_area <= 0.0} {
 
     set inst_count [llength [get_cells -hierarchical *]]
 
+    # Only a fallback to prevent the flow from stopping.
+    # This value should be treated as estimated rather than measured area.
     set average_cell_area 12.0
 
     set total_cell_area \
         [expr {$inst_count * $average_cell_area}]
 
     puts "\[WARNING\] Cell-area extraction returned zero."
-
-    puts "\[WARNING\] Using fallback:"
+    puts "\[WARNING\] Using estimated fallback area:"
     puts "            Instances = $inst_count"
     puts "            Area      = ${total_cell_area} um^2"
 }
 
 
 # ==============================================================================
-# 9. Dynamic Floorplan
+# 10. Dynamic Floorplan
 # ==============================================================================
 
+# Additional area allowance for placement/routing overhead.
 set buffered_cell_area \
     [expr {$total_cell_area * 1.15}]
 
@@ -224,29 +266,36 @@ set core_dim \
     [expr {sqrt($required_core_area)}]
 
 
-# SKY130 HD site height
+# ==============================================================================
+# 11. Snap Core to SKY130 HD Site Grid
+# ==============================================================================
+
 set site_height 2.72
 
-# Snap core dimension to site grid
 set core_dim_snapped \
     [expr {ceil($core_dim / $site_height) * $site_height}]
 
 
-# Minimum core dimension
+# Minimum practical core dimension for this experiment.
 if {$core_dim_snapped < 150.0} {
     set core_dim_snapped 150.0
 }
 
 
 # ==============================================================================
-# 10. Core Margin
+# 12. Core Margin
 # ==============================================================================
 
 if {$UTIL >= 60} {
+
     set raw_margin 50.0
+
 } elseif {$UTIL >= 40} {
+
     set raw_margin 35.0
+
 } else {
+
     set raw_margin 25.0
 }
 
@@ -255,7 +304,7 @@ set core_margin \
 
 
 # ==============================================================================
-# 11. Die and Core Coordinates
+# 13. Die and Core Coordinates
 # ==============================================================================
 
 set core_x0 $core_margin
@@ -267,7 +316,6 @@ set core_x1 \
 set core_y1 \
     [expr {$core_y0 + $core_dim_snapped}]
 
-
 set die_x0 0.0
 set die_y0 0.0
 
@@ -276,7 +324,6 @@ set die_x1 \
 
 set die_y1 \
     [expr {$core_y1 + $core_margin}]
-
 
 set actual_core_area \
     [expr {
@@ -305,7 +352,7 @@ puts "=============================================================="
 
 
 # ==============================================================================
-# 12. Initialize Floorplan
+# 14. Initialize Floorplan
 # ==============================================================================
 
 puts "\[INFO\] Initializing floorplan..."
@@ -322,7 +369,7 @@ if {[catch {
     puts "\[WARNING\] Site '$site_name' failed:"
     puts "           $err"
 
-    puts "\[INFO\] Trying site 'unithd'..."
+    puts "\[INFO\] Trying fallback site 'unithd'..."
 
     if {[catch {
 
@@ -341,16 +388,25 @@ if {[catch {
 
 
 # ==============================================================================
-# 13. Routing Tracks
+# 15. Routing Tracks
 # ==============================================================================
 
 puts "\[INFO\] Creating routing tracks..."
 
-make_tracks
+if {[catch {
+
+    make_tracks
+
+} err]} {
+
+    puts "\[ERROR\] make_tracks failed:"
+    puts "$err"
+    exit 1
+}
 
 
 # ==============================================================================
-# 14. Timing Constraints
+# 16. Timing Constraints
 # ==============================================================================
 
 puts "\[INFO\] Creating clock..."
@@ -361,7 +417,10 @@ create_clock \
     [get_ports clk]
 
 
+# ------------------------------------------------------------------------------
 # Input delay
+# ------------------------------------------------------------------------------
+
 set in_ports \
     [get_ports * -filter "direction == input && name != clk"]
 
@@ -374,7 +433,10 @@ if {[llength $in_ports] > 0} {
 }
 
 
+# ------------------------------------------------------------------------------
 # Output delay
+# ------------------------------------------------------------------------------
+
 set out_ports [all_outputs]
 
 if {[llength $out_ports] > 0} {
@@ -387,26 +449,26 @@ if {[llength $out_ports] > 0} {
 
 
 # ==============================================================================
-# 15. Global Placement
+# 17. Global Placement
 # ==============================================================================
 
 set place_density $util_decimal
 
-# OpenROAD becomes difficult at extremely high density.
-# Keep the actual placement density equal to the requested value
-# up to 0.70 for this experiment.
+# OpenROAD placement becomes increasingly difficult at very high density.
+# The experiment currently supports requested utilization values up to 70%.
 if {$place_density > 0.70} {
     set place_density 0.70
 }
 
-puts "\[INFO\] Target placement density: $place_density"
+puts "\[INFO\] Requested utilization : $UTIL%"
+puts "\[INFO\] Placement density    : $place_density"
 
 global_placement \
     -density $place_density
 
 
 # ==============================================================================
-# 16. Pin Placement
+# 18. Pin Placement
 # ==============================================================================
 
 puts "\[INFO\] Placing IO pins..."
@@ -428,49 +490,101 @@ if {[catch {
 
 
 # ==============================================================================
-# 17. Detailed Placement
+# 19. Detailed Placement
 # ==============================================================================
 
 puts "\[INFO\] Running detailed placement..."
 
-detailed_placement
+if {[catch {
+
+    detailed_placement
+
+} err]} {
+
+    puts "\[ERROR\] Detailed placement failed:"
+    puts "$err"
+    exit 1
+}
 
 check_placement
 
 
 # ==============================================================================
-# 18. Design Repair
+# 20. Initial Placement Report
+# ==============================================================================
+
+puts "\[INFO\] Writing placement report..."
+
+if {[catch {
+
+    report_design_area \
+        > "${run_dir}/placement.rpt"
+
+} err]} {
+
+    puts "\[WARNING\] Placement/area report failed:"
+    puts "$err"
+}
+
+
+# ==============================================================================
+# 21. Design Repair
 # ==============================================================================
 
 puts "\[INFO\] Running design repair..."
 
-repair_design
+if {[catch {
+
+    repair_design
+
+} err]} {
+
+    puts "\[WARNING\] Design repair failed:"
+    puts "$err"
+}
 
 
 # ==============================================================================
-# 19. Timing Repair
+# 22. Timing Repair
 # ==============================================================================
 
 puts "\[INFO\] Running timing repair..."
 
-repair_timing \
-    -setup \
-    -setup_margin 0.2
+if {[catch {
+
+    repair_timing \
+        -setup \
+        -setup_margin 0.2
+
+} err]} {
+
+    puts "\[WARNING\] Timing repair failed:"
+    puts "$err"
+}
 
 
 # ==============================================================================
-# 20. Re-Legalize
+# 23. Re-Legalize Placement
 # ==============================================================================
 
 puts "\[INFO\] Re-running detailed placement..."
 
-detailed_placement
+if {[catch {
+
+    detailed_placement
+
+} err]} {
+
+    puts "\[ERROR\] Post-repair detailed placement failed:"
+    puts "$err"
+    exit 1
+}
 
 check_placement
 
 
 # ==============================================================================
-# 21. Global Routing
+# 24. Global Routing
 # ==============================================================================
 
 puts "\[INFO\] Running global routing..."
@@ -487,13 +601,43 @@ if {[catch {
 
     puts "\[ERROR\] Global routing failed:"
     puts "$err"
-
     exit 1
+}
+
+if {![file exists $route_guide]} {
+
+    puts "\[ERROR\] Global routing completed but route guide was not generated."
+    exit 1
+}
+
+puts "\[INFO\] Global route guide generated:"
+puts "         $route_guide"
+
+
+# ==============================================================================
+# 25. Routing Status / Congestion Report
+# ==============================================================================
+
+puts "\[INFO\] Generating routing-status report..."
+
+if {[catch {
+
+    report_route_status \
+        > "${run_dir}/route_status.rpt"
+
+} err]} {
+
+    puts "\[WARNING\] report_route_status failed:"
+    puts "$err"
+
+} else {
+
+    puts "\[INFO\] Routing-status report generated."
 }
 
 
 # ==============================================================================
-# 22. Detailed Routing
+# 26. Detailed Routing
 # ==============================================================================
 
 puts "\[INFO\] Running detailed routing..."
@@ -504,16 +648,37 @@ if {[catch {
 
 } err]} {
 
-    puts "\[WARNING\] Detailed routing failed:"
+    puts "\[ERROR\] Detailed routing failed:"
+    puts "$err"
+
+    # Treat routing failure as a failed dataset point.
+    exit 1
+}
+
+
+# ==============================================================================
+# 27. Final Routing Status
+# ==============================================================================
+
+puts "\[INFO\] Generating final routing-status report..."
+
+if {[catch {
+
+    report_route_status \
+        > "${run_dir}/route_status_final.rpt"
+
+} err]} {
+
+    puts "\[WARNING\] Final route-status report failed:"
     puts "$err"
 }
 
 
 # ==============================================================================
-# 23. Final Timing Analysis
+# 28. Final Timing Analysis
 # ==============================================================================
 
-puts "\[INFO\] Running final timing analysis..."
+puts "\[INFO\] Running final setup timing analysis..."
 
 if {[catch {
 
@@ -524,10 +689,13 @@ if {[catch {
 
 } err]} {
 
-    puts "\[WARNING\] Timing report failed:"
+    puts "\[ERROR\] Setup timing report failed:"
     puts "$err"
+    exit 1
 }
 
+
+puts "\[INFO\] Running final hold timing analysis..."
 
 if {[catch {
 
@@ -538,16 +706,17 @@ if {[catch {
 
 } err]} {
 
-    puts "\[WARNING\] Hold timing report failed:"
+    puts "\[ERROR\] Hold timing report failed:"
     puts "$err"
+    exit 1
 }
 
 
 # ==============================================================================
-# 24. Routing / Congestion Report
+# 29. Wire-Length Report
 # ==============================================================================
 
-puts "\[INFO\] Generating routing report..."
+puts "\[INFO\] Generating wire-length report..."
 
 if {[catch {
 
@@ -562,28 +731,53 @@ if {[catch {
 
 
 # ==============================================================================
-# 25. Save Final Database
+# 30. Final Database
 # ==============================================================================
 
 puts "\[INFO\] Saving final OpenDB database..."
 
-write_db \
-    "${run_dir}/final.odb"
+if {[catch {
+
+    write_db \
+        "${run_dir}/final.odb"
+
+} err]} {
+
+    puts "\[ERROR\] Failed to save final database:"
+    puts "$err"
+    exit 1
+}
+
+if {![file exists "${run_dir}/final.odb"]} {
+
+    puts "\[ERROR\] final.odb was not created."
+    exit 1
+}
 
 
 # ==============================================================================
-# 26. Final Statistics
+# 31. Final Summary
 # ==============================================================================
 
+puts ""
 puts "=============================================================="
-puts "\[SUCCESS\] OpenROAD flow completed"
+puts "\[SUCCESS\] OpenROAD flow completed successfully"
 puts "=============================================================="
-puts "Run tag       : $RUN_TAG"
-puts "Array size    : $ARRAY_SIZE"
-puts "Data width    : $DATA_WIDTH"
-puts "Utilization   : $UTIL%"
-puts "Clock period  : $CLK_PERIOD ns"
-puts "Database      : ${run_dir}/final.odb"
-puts "Route guide   : ${route_guide}"
+puts "Run tag          : $RUN_TAG"
+puts "Array size       : $ARRAY_SIZE"
+puts "Data width       : $DATA_WIDTH"
+puts "Requested util   : $UTIL%"
+puts "Placement density: $place_density"
+puts "Clock period     : $CLK_PERIOD ns"
+puts "Cell area        : $total_cell_area um^2"
+puts "Core area        : $actual_core_area um^2"
+puts "Projected util   : [format "%.2f" $projected_util]%"
+puts ""
+puts "Database         : ${run_dir}/final.odb"
+puts "Route guide      : ${route_guide}"
+puts "Route status     : ${run_dir}/route_status_final.rpt"
+puts "Setup timing     : ${run_dir}/timing_setup.rpt"
+puts "Hold timing      : ${run_dir}/timing_hold.rpt"
+puts "Wire length      : ${run_dir}/wire_length.rpt"
+puts "Placement report : ${run_dir}/placement.rpt"
 puts "=============================================================="
-```

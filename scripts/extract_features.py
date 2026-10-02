@@ -1,15 +1,32 @@
-```python
 import os
 import json
 import re
 
 
-# ==============================================================================
-# Utility Functions
-# ==============================================================================
+# ================================================================
+# Configuration
+# ================================================================
+
+RUN_TAG = os.environ.get("RUN_TAG", "run_test")
+
+RUN_DIR = os.path.join(
+    "systolic_project",
+    "runs",
+    RUN_TAG
+)
+
+OUTPUT_JSON = os.path.join(
+    RUN_DIR,
+    "features.json"
+)
+
+
+# ================================================================
+# Utility functions
+# ================================================================
 
 def read_file(path):
-    """Read a text file safely."""
+
     if not os.path.exists(path):
         return ""
 
@@ -20,520 +37,545 @@ def read_file(path):
         return ""
 
 
-def first_float(patterns, text, default=0.0):
-    """Try multiple regex patterns and return the first float found."""
+def first_float(patterns, text):
+
     for pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+
+        match = re.search(
+            pattern,
+            text,
+            re.IGNORECASE
+        )
 
         if match:
+
             try:
                 return float(match.group(1))
-            except (ValueError, IndexError):
+            except (ValueError, TypeError):
                 pass
 
-    return default
+    return None
 
 
-def first_int(patterns, text, default=0):
-    """Try multiple regex patterns and return the first integer found."""
+def first_int(patterns, text):
+
     for pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+
+        match = re.search(
+            pattern,
+            text,
+            re.IGNORECASE
+        )
 
         if match:
+
             try:
                 return int(match.group(1))
-            except (ValueError, IndexError):
+            except (ValueError, TypeError):
                 pass
 
-    return default
+    return None
 
 
-# ==============================================================================
-# Main Extraction
-# ==============================================================================
+# ================================================================
+# Wirelength extraction
+# ================================================================
 
-def extract_and_emit():
+def extract_wirelength():
 
-    # --------------------------------------------------------------------------
-    # Environment
-    # --------------------------------------------------------------------------
-
-    run_tag = os.environ.get("RUN_TAG", "run_test")
-
-    run_dir = os.path.join(
-        "systolic_project",
-        "runs",
-        run_tag
+    # Prefer detailed-route report.
+    detailed_path = os.path.join(
+        RUN_DIR,
+        "wirelength_detailed.rpt"
     )
 
-    # IMPORTANT:
-    # Features are stored INSIDE the run directory.
-    json_path = os.path.join(
-        run_dir,
-        "features.json"
+    text = read_file(detailed_path)
+
+    # OpenROAD commonly prints:
+    #
+    # Total wirelength: XXXXX um
+    #
+    value = first_float([
+        r"Total\s+wirelength\s*:\s*([0-9.eE+\-]+)\s*um",
+        r"Total\s+wire\s+length\s*:\s*([0-9.eE+\-]+)\s*um",
+        r"wirelength\s*[:=]\s*([0-9.eE+\-]+)"
+    ], text)
+
+    if value is not None:
+        return value
+
+    # Try final report.
+    final_path = os.path.join(
+        RUN_DIR,
+        "wirelength_final.rpt"
     )
 
-    odb_path = os.path.join(
-        run_dir,
-        "final.odb"
+    text = read_file(final_path)
+
+    value = first_float([
+        r"Total\s+wirelength\s*:\s*([0-9.eE+\-]+)\s*um",
+        r"Total\s+wire\s+length\s*:\s*([0-9.eE+\-]+)\s*um",
+        r"wirelength\s*[:=]\s*([0-9.eE+\-]+)"
+    ], text)
+
+    if value is not None:
+        return value
+
+    # Try global-route report.
+    global_path = os.path.join(
+        RUN_DIR,
+        "wirelength_global.rpt"
     )
 
-    # --------------------------------------------------------------------------
-    # Input parameters
-    # --------------------------------------------------------------------------
+    text = read_file(global_path)
 
-    array_size = int(
-        os.environ.get("ARRAY_SIZE", 4)
+    value = first_float([
+        r"Total\s+wirelength\s*:\s*([0-9.eE+\-]+)\s*um",
+        r"Total\s+wire\s+length\s*:\s*([0-9.eE+\-]+)\s*um",
+        r"wirelength\s*[:=]\s*([0-9.eE+\-]+)"
+    ], text)
+
+    return value
+
+
+# ================================================================
+# Congestion extraction
+# ================================================================
+
+def extract_congestion():
+
+    path = os.path.join(
+        RUN_DIR,
+        "congestion.rpt"
     )
 
-    data_width = int(
-        os.environ.get("DATA_WIDTH", 8)
+    text = read_file(path)
+
+    if not text:
+        return None
+
+    # Look for Total row:
+    #
+    # Total 460323 85090 18.48% 0 / 0 / 0
+    #
+    # We capture:
+    # resource
+    # demand
+    # utilization
+    # total overflow
+
+    patterns = [
+
+        r"^\s*Total\s+"
+        r"(\d+)\s+"
+        r"(\d+)\s+"
+        r"([0-9.]+)%\s+"
+        r"\d+\s*/\s*"
+        r"\d+\s*/\s*"
+        r"(\d+)",
+
+        r"Total\s+"
+        r"(\d+)\s+"
+        r"(\d+)\s+"
+        r"([0-9.]+)%\s+"
+        r"\d+\s*/\s*"
+        r"\d+\s*/\s*"
+        r"(\d+)"
+    ]
+
+    for pattern in patterns:
+
+        match = re.search(
+            pattern,
+            text,
+            re.IGNORECASE |
+            re.MULTILINE
+        )
+
+        if match:
+
+            resource = int(match.group(1))
+            demand = int(match.group(2))
+            utilization = float(match.group(3))
+            overflow = int(match.group(4))
+
+            return {
+                "routing_resource": resource,
+                "routing_demand": demand,
+                "routing_utilization_pct": utilization,
+                "routing_total_overflow": overflow
+            }
+
+    return None
+
+
+# ================================================================
+# Timing extraction
+# ================================================================
+
+def extract_timing():
+
+    setup_path = os.path.join(
+        RUN_DIR,
+        "timing_setup.rpt"
     )
 
-    utilization = float(
-        os.environ.get("UTIL", 50.0)
+    hold_path = os.path.join(
+        RUN_DIR,
+        "timing_hold.rpt"
     )
 
-    clk_period = float(
-        os.environ.get("CLK_PERIOD", 5.0)
+    setup_text = read_file(setup_path)
+    hold_text = read_file(hold_path)
+
+    # OpenSTA/OpenROAD timing reports can vary slightly.
+    # Search for explicit slack values.
+
+    setup_values = re.findall(
+        r"slack\s+\([^)]+\)\s+(-?[0-9.eE+\-]+)",
+        setup_text,
+        re.IGNORECASE
     )
 
-    # --------------------------------------------------------------------------
-    # Initialize feature schema
-    # --------------------------------------------------------------------------
+    hold_values = re.findall(
+        r"slack\s+\([^)]+\)\s+(-?[0-9.eE+\-]+)",
+        hold_text,
+        re.IGNORECASE
+    )
 
-    metrics = {
+    setup_values = [
+        float(x)
+        for x in setup_values
+        if x not in ("", None)
+    ]
 
-        # ==============================================================
-        # 1-5: Architectural / SDC inputs
-        # ==============================================================
+    hold_values = [
+        float(x)
+        for x in hold_values
+        if x not in ("", None)
+    ]
 
-        "run_tag": run_tag,
-
-        "array_size": array_size,
-
-        "data_width": data_width,
-
-        "utilization": utilization,
-
-        "clk_period_ns": clk_period,
-
-
-        # ==============================================================
-        # 6-11: Physical design / gate-level features
-        # ==============================================================
-
-        "num_cells": 0,
-
-        "num_nets": 0,
-
-        "num_pins": 0,
-
-        "num_buffers": 0,
-
-        "die_area_u2": 0.0,
-
-        "core_area_u2": 0.0,
-
-
-        # ==============================================================
-        # 12-14: Routing / congestion
-        # ==============================================================
-
-        "wirelength_u": 0.0,
-
-        "via_count": 0,
-
-        "congestion_overflow_pct": 0.0,
-
-
-        # ==============================================================
-        # 15-17: Timing
-        # ==============================================================
-
-        "wns_setup_ps": 0.0,
-
-        "tns_setup_ps": 0.0,
-
-        "wns_hold_ps": 0.0
+    result = {
+        "wns_setup_ns": None,
+        "tns_setup_ns": None,
+        "wns_hold_ns": None
     }
 
+    if setup_values:
 
-    # ==========================================================================
-    # 1. Check database
-    # ==========================================================================
-
-    if not os.path.exists(odb_path):
-
-        print(
-            f"[WARNING] final.odb not found: {odb_path}"
+        result["wns_setup_ns"] = min(
+            setup_values
         )
 
-    else:
-
-        print(
-            f"[INFO] Found OpenROAD database: {odb_path}"
-        )
-
-
-    # ==========================================================================
-    # 2. Parse OpenROAD logs / reports
-    # ==========================================================================
-
-    openroad_log = read_file(
-        os.path.join(
-            run_dir,
-            "openroad_log.txt"
-        )
-    )
-
-    timing_setup = read_file(
-        os.path.join(
-            run_dir,
-            "timing_setup.rpt"
-        )
-    )
-
-    timing_hold = read_file(
-        os.path.join(
-            run_dir,
-            "timing_hold.rpt"
-        )
-    )
-
-    wirelength_report = read_file(
-        os.path.join(
-            run_dir,
-            "wire_length.rpt"
-        )
-    )
-
-    synth_report = read_file(
-        os.path.join(
-            run_dir,
-            "yosys_synth_area.rpt"
-        )
-    )
-
-    # ==========================================================================
-    # 3. Yosys cell count
-    # ==========================================================================
-
-    metrics["num_cells"] = first_int(
-        [
-            r"Number of cells:\s*([0-9]+)",
-            r"Number of cells\s+([0-9]+)"
-        ],
-        synth_report,
-        0
-    )
-
-
-    # ==========================================================================
-    # 4. Yosys / OpenROAD net count
-    # ==========================================================================
-
-    metrics["num_nets"] = first_int(
-        [
-            r"Number of wires:\s*([0-9]+)",
-            r"Number of nets:\s*([0-9]+)",
-            r"nets\s*[:=]\s*([0-9]+)"
-        ],
-        synth_report + "\n" + openroad_log,
-        0
-    )
-
-
-    # ==========================================================================
-    # 5. Pin count
-    # ==========================================================================
-
-    metrics["num_pins"] = first_int(
-        [
-            r"Number of ports:\s*([0-9]+)",
-            r"Number of pins:\s*([0-9]+)",
-            r"pins\s*[:=]\s*([0-9]+)"
-        ],
-        synth_report + "\n" + openroad_log,
-        0
-    )
-
-
-    # ==========================================================================
-    # 6. Buffer count
-    # ==========================================================================
-
-    buffer_matches = re.findall(
-        r"\b(buf[a-zA-Z0-9_]*|clkbuf[a-zA-Z0-9_]*)\b",
-        synth_report + "\n" + openroad_log,
-        re.IGNORECASE
-    )
-
-    metrics["num_buffers"] = len(buffer_matches)
-
-
-    # ==========================================================================
-    # 7. Die area
-    # ==========================================================================
-
-    die_x0 = first_float(
-        [
-            r"Die\s*:\s*([0-9.eE+-]+)"
-        ],
-        openroad_log,
-        0.0
-    )
-
-    # Try to extract the full die coordinates.
-    die_match = re.search(
-        r"Die\s*:\s*"
-        r"([0-9.eE+-]+)\s+"
-        r"([0-9.eE+-]+)\s+"
-        r"([0-9.eE+-]+)\s+"
-        r"([0-9.eE+-]+)",
-        openroad_log,
-        re.IGNORECASE
-    )
-
-    if die_match:
-
-        x0 = float(die_match.group(1))
-        y0 = float(die_match.group(2))
-        x1 = float(die_match.group(3))
-        y1 = float(die_match.group(4))
-
-        metrics["die_area_u2"] = round(
-            abs(x1 - x0) * abs(y1 - y0),
-            2
-        )
-
-
-    # ==========================================================================
-    # 8. Core area
-    # ==========================================================================
-
-    core_match = re.search(
-        r"Core\s*:\s*"
-        r"([0-9.eE+-]+)\s+"
-        r"([0-9.eE+-]+)\s+"
-        r"([0-9.eE+-]+)\s+"
-        r"([0-9.eE+-]+)",
-        openroad_log,
-        re.IGNORECASE
-    )
-
-    if core_match:
-
-        x0 = float(core_match.group(1))
-        y0 = float(core_match.group(2))
-        x1 = float(core_match.group(3))
-        y1 = float(core_match.group(4))
-
-        metrics["core_area_u2"] = round(
-            abs(x1 - x0) * abs(y1 - y0),
-            2
-        )
-
-
-    # ==========================================================================
-    # 9. Wirelength
-    # ==========================================================================
-
-    metrics["wirelength_u"] = first_float(
-        [
-            r"total\s+wire\s+length\s*[:=]\s*([0-9.eE+-]+)",
-            r"wire\s+length\s*[:=]\s*([0-9.eE+-]+)",
-            r"Total wire length\s*[:=]\s*([0-9.eE+-]+)"
-        ],
-        wirelength_report,
-        0.0
-    )
-
-
-    # ==========================================================================
-    # 10. Via count
-    # ==========================================================================
-
-    metrics["via_count"] = first_int(
-        [
-            r"vias?\s*[:=]\s*([0-9]+)",
-            r"Total vias?\s*[:=]\s*([0-9]+)"
-        ],
-        openroad_log,
-        0
-    )
-
-
-    # ==========================================================================
-    # 11. Congestion
-    # ==========================================================================
-
-    congestion_value = first_float(
-        [
-            r"overflow\s*[:=]\s*([0-9.eE+-]+)",
-            r"congestion\s+overflow\s*[:=]\s*([0-9.eE+-]+)",
-            r"total\s+overflow\s*[:=]\s*([0-9.eE+-]+)"
-        ],
-        openroad_log,
-        0.0
-    )
-
-    metrics["congestion_overflow_pct"] = round(
-        congestion_value,
-        4
-    )
-
-
-    # ==========================================================================
-    # 12. Setup WNS
-    # ==========================================================================
-
-    setup_wns = first_float(
-        [
-            r"wns\s*[:=]\s*(-?[0-9.eE+-]+)",
-            r"Worst\s+Slack\s*[:=]\s*(-?[0-9.eE+-]+)",
-            r"worst\s+slack\s*(-?[0-9.eE+-]+)"
-        ],
-        timing_setup,
-        0.0
-    )
-
-    metrics["wns_setup_ps"] = round(
-        setup_wns * 1000.0,
-        2
-    )
-
-
-    # ==========================================================================
-    # 13. Setup TNS
-    # ==========================================================================
-
-    setup_tns = first_float(
-        [
-            r"tns\s*[:=]\s*(-?[0-9.eE+-]+)",
-            r"Total\s+Negative\s+Slack\s*[:=]\s*(-?[0-9.eE+-]+)",
-            r"total\s+negative\s+slack\s*(-?[0-9.eE+-]+)"
-        ],
-        timing_setup,
-        0.0
-    )
-
-    metrics["tns_setup_ps"] = round(
-        setup_tns * 1000.0,
-        2
-    )
-
-
-    # ==========================================================================
-    # 14. Hold WNS
-    # ==========================================================================
-
-    hold_wns = first_float(
-        [
-            r"wns\s*[:=]\s*(-?[0-9.eE+-]+)",
-            r"Worst\s+Slack\s*[:=]\s*(-?[0-9.eE+-]+)",
-            r"worst\s+slack\s*(-?[0-9.eE+-]+)"
-        ],
-        timing_hold,
-        0.0
-    )
-
-    metrics["wns_hold_ps"] = round(
-        hold_wns * 1000.0,
-        2
-    )
-
-
-    # ==========================================================================
-    # 15. Derived features
-    # ==========================================================================
-
-    # These are useful for ML and sanity checking.
-
-    if metrics["core_area_u2"] > 0:
-
-        metrics["cell_density_pct"] = round(
-            (
-                metrics["num_cells"] /
-                metrics["core_area_u2"]
-            ) * 100.0,
-            4
-        )
-
-    else:
-
-        metrics["cell_density_pct"] = 0.0
-
-
-    if metrics["array_size"] > 0:
-
-        metrics["pe_count"] = (
-            metrics["array_size"] *
-            metrics["array_size"]
-        )
-
-    else:
-
-        metrics["pe_count"] = 0
-
-
-    # ==========================================================================
-    # 16. Extraction status
-    # ==========================================================================
-
-    metrics["odb_exists"] = os.path.exists(
-        odb_path
-    )
-
-    metrics["reports_available"] = {
-        "synth_report": os.path.exists(
-            os.path.join(
-                run_dir,
-                "yosys_synth_area.rpt"
+        negative_setup = [
+            x for x in setup_values
+            if x < 0
+        ]
+
+        if negative_setup:
+            result["tns_setup_ns"] = sum(
+                negative_setup
             )
-        ),
+        else:
+            result["tns_setup_ns"] = 0.0
 
-        "openroad_log": os.path.exists(
-            os.path.join(
-                run_dir,
-                "openroad_log.txt"
-            )
-        ),
+    if hold_values:
 
-        "timing_setup": os.path.exists(
-            os.path.join(
-                run_dir,
-                "timing_setup.rpt"
-            )
-        ),
-
-        "timing_hold": os.path.exists(
-            os.path.join(
-                run_dir,
-                "timing_hold.rpt"
-            )
-        ),
-
-        "wirelength": os.path.exists(
-            os.path.join(
-                run_dir,
-                "wire_length.rpt"
-            )
+        result["wns_hold_ns"] = min(
+            hold_values
         )
+
+    return result
+
+
+# ================================================================
+# Cell/net extraction from Yosys report
+# ================================================================
+
+def extract_yosys_stats():
+
+    path = os.path.join(
+        RUN_DIR,
+        "yosys_synth_area.rpt"
+    )
+
+    text = read_file(path)
+
+    result = {
+        "num_cells": None,
+        "num_wires": None
     }
 
+    value = first_int(
+        [
+            r"Number\s+of\s+cells\s*:\s*(\d+)"
+        ],
+        text
+    )
 
-    # ==========================================================================
-    # 17. Save JSON
-    # ==========================================================================
+    if value is not None:
+        result["num_cells"] = value
+
+    value = first_int(
+        [
+            r"Number\s+of\s+wires\s*:\s*(\d+)"
+        ],
+        text
+    )
+
+    if value is not None:
+        result["num_wires"] = value
+
+    return result
+
+
+# ================================================================
+# Main extraction
+# ================================================================
+
+def extract_features():
+
+    print("=" * 70)
+    print("FEATURE EXTRACTION")
+    print("=" * 70)
+
+    print(f"Run tag : {RUN_TAG}")
+    print(f"Run dir : {RUN_DIR}")
 
     os.makedirs(
-        run_dir,
+        RUN_DIR,
         exist_ok=True
     )
 
+    # ------------------------------------------------------------
+    # Base experiment parameters
+    # ------------------------------------------------------------
+
+    metrics = {
+
+        "run_tag": RUN_TAG,
+
+        "array_size":
+            int(os.environ.get(
+                "ARRAY_SIZE",
+                4
+            )),
+
+        "data_width":
+            int(os.environ.get(
+                "DATA_WIDTH",
+                8
+            )),
+
+        "utilization":
+            float(os.environ.get(
+                "UTIL",
+                50
+            )),
+
+        "clk_period_ns":
+            float(os.environ.get(
+                "CLK_PERIOD",
+                5.0
+            )),
+
+        # --------------------------------------------------------
+        # Design size
+        # --------------------------------------------------------
+
+        "num_cells": None,
+        "num_nets": None,
+        "num_pins": None,
+        "num_buffers": None,
+
+        # --------------------------------------------------------
+        # Physical
+        # --------------------------------------------------------
+
+        "die_area_u2": None,
+        "core_area_u2": None,
+
+        # --------------------------------------------------------
+        # Routing
+        # --------------------------------------------------------
+
+        "wirelength_u": None,
+        "via_count": None,
+        "congestion_overflow_pct": None,
+
+        # --------------------------------------------------------
+        # Timing
+        # --------------------------------------------------------
+
+        "wns_setup_ps": None,
+        "tns_setup_ps": None,
+        "wns_hold_ps": None
+    }
+
+    # ============================================================
+    # Yosys statistics
+    # ============================================================
+
+    yosys_stats = extract_yosys_stats()
+
+    if yosys_stats["num_cells"] is not None:
+
+        metrics["num_cells"] = \
+            yosys_stats["num_cells"]
+
+    # ============================================================
+    # Wirelength
+    # ============================================================
+
+    wirelength = extract_wirelength()
+
+    if wirelength is not None:
+
+        metrics["wirelength_u"] = round(
+            wirelength,
+            3
+        )
+
+        print(
+            f"[OK] Wirelength = "
+            f"{metrics['wirelength_u']} um"
+        )
+
+    else:
+
+        print(
+            "[WARNING] Wirelength could not "
+            "be extracted."
+        )
+
+    # ============================================================
+    # Congestion
+    # ============================================================
+
+    congestion = extract_congestion()
+
+    if congestion is not None:
+
+        # The original 17-feature schema uses
+        # congestion_overflow_pct.
+        #
+        # We store total overflow as the primary
+        # congestion quantity.
+
+        metrics["congestion_overflow_pct"] = \
+            float(
+                congestion[
+                    "routing_total_overflow"
+                ]
+            )
+
+        print(
+            "[OK] Routing utilization = "
+            f"{congestion['routing_utilization_pct']}%"
+        )
+
+        print(
+            "[OK] Total routing overflow = "
+            f"{congestion['routing_total_overflow']}"
+        )
+
+    else:
+
+        print(
+            "[WARNING] Congestion report "
+            "could not be parsed."
+        )
+
+    # ============================================================
+    # Timing
+    # ============================================================
+
+    timing = extract_timing()
+
+    if timing["wns_setup_ns"] is not None:
+
+        metrics["wns_setup_ps"] = round(
+            timing["wns_setup_ns"] * 1000.0,
+            3
+        )
+
+    if timing["tns_setup_ns"] is not None:
+
+        metrics["tns_setup_ps"] = round(
+            timing["tns_setup_ns"] * 1000.0,
+            3
+        )
+
+    if timing["wns_hold_ns"] is not None:
+
+        metrics["wns_hold_ps"] = round(
+            timing["wns_hold_ns"] * 1000.0,
+            3
+        )
+
+    # ============================================================
+    # ODB extraction
+    # ============================================================
+
+    odb_path = os.path.join(
+        RUN_DIR,
+        "final.odb"
+    )
+
+    if os.path.exists(odb_path):
+
+        print(
+            "[INFO] final.odb exists."
+        )
+
+        # The exact Python API differs across
+        # OpenROAD builds, so do not fabricate
+        # database values when the API is unavailable.
+
+        try:
+
+            import openroad
+
+            print(
+                "[INFO] OpenROAD Python module "
+                "available."
+            )
+
+        except ImportError:
+
+            print(
+                "[INFO] OpenROAD Python module "
+                "not available."
+            )
+
+    # ============================================================
+    # Derived validity fields
+    # ============================================================
+
+    metrics["valid_run"] = (
+        os.path.exists(odb_path)
+        and metrics["wirelength_u"] is not None
+    )
+
+    metrics["wirelength_available"] = (
+        metrics["wirelength_u"] is not None
+    )
+
+    metrics["congestion_available"] = (
+        metrics["congestion_overflow_pct"]
+        is not None
+    )
+
+    metrics["timing_available"] = (
+        metrics["wns_setup_ps"] is not None
+    )
+
+    # ============================================================
+    # Save
+    # ============================================================
+
     with open(
-        json_path,
+        OUTPUT_JSON,
         "w"
     ) as f:
 
@@ -543,27 +585,21 @@ def extract_and_emit():
             indent=4
         )
 
+    print()
+    print("=" * 70)
+    print("FEATURE EXTRACTION COMPLETE")
+    print("=" * 70)
+    print(f"Output: {OUTPUT_JSON}")
 
-    print(
-        f"[SUCCESS] Feature extraction completed."
-    )
+    for key, value in metrics.items():
 
-    print(
-        f"[SUCCESS] Saved: {json_path}"
-    )
-
-    print(
-        json.dumps(
-            metrics,
-            indent=4
+        print(
+            f"{key:30s}: {value}"
         )
-    )
 
+    print("=" * 70)
 
-# ==============================================================================
-# Entry point
-# ==============================================================================
 
 if __name__ == "__main__":
-    extract_and_emit()
-```
+
+    extract_features()

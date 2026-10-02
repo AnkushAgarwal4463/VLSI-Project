@@ -128,6 +128,10 @@ puts "\[INFO\] Reading technology LEF..."
 read_lef -tech $tech_lef
 read_lef $std_cell_lef
 
+puts "===== OPENROAD SITE CHECK ====="
+puts "unithd exists: [expr {[ord::get_db_tech]->findSite(\"unithd\") ne \"\"}]"
+puts "================================"
+
 puts "\[INFO\] Reading Liberty..."
 
 read_liberty $lib_file

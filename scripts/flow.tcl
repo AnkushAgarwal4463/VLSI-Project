@@ -150,7 +150,6 @@ puts "\[INFO\] Calculating floorplan..."
 
 set util_decimal [expr {$UTIL / 100.0}]
 
-# Approximate cell area from liberty/database.
 set total_cell_area 0.0
 
 foreach inst [get_cells -hierarchical *] {
@@ -171,6 +170,7 @@ foreach inst [get_cells -hierarchical *] {
 }
 
 # Fallback if OpenROAD cannot retrieve the area.
+
 if {$total_cell_area <= 0.0} {
 
     set inst_count \
@@ -182,7 +182,6 @@ if {$total_cell_area <= 0.0} {
         [expr {$inst_count * $average_cell_area}]
 
     puts "\[WARNING\] Using estimated cell area."
-
 }
 
 set buffered_cell_area \
@@ -195,6 +194,7 @@ set core_dim \
     [expr {sqrt($required_core_area)}]
 
 # SKY130 unithd site height.
+
 set site_height 2.72
 
 set core_dim_snapped \
@@ -237,27 +237,12 @@ set die_x1 \
 
 set die_y1 \
     [expr {$core_y1 + $core_margin}]
-    
-puts "===== AVAILABLE SITES ====="
-
-set lef_fp [open $std_cell_lef r]
-set lef_data [read $lef_fp]
-close $lef_fp
-
-foreach line [split $lef_data "\n"] {
-    if {[string match "SITE *" [string trim $line]]} {
-        puts $line
-    }
-}
-
-puts "==========================="
-
-puts "==========================="
 
 initialize_floorplan \
     -die_area "$die_x0 $die_y0 $die_x1 $die_y1" \
     -core_area "$core_x0 $core_y0 $core_x1 $core_y1" \
     -site unithd
+
 make_tracks
 
 # ----------------------------------------------------------------------
@@ -337,6 +322,8 @@ check_placement
 # 13. Placement report
 # ----------------------------------------------------------------------
 
+puts "\[INFO\] Generating placement area report..."
+
 if {[catch {
 
     report_design_area \
@@ -398,14 +385,12 @@ global_route \
 if {![file exists $route_guide]} {
 
     puts "\[ERROR\] route.guide was not generated."
-
     exit 1
 }
 
 if {![file exists $congestion_report]} {
 
     puts "\[WARNING\] congestion.rpt was not generated."
-
 }
 
 # ----------------------------------------------------------------------
@@ -433,7 +418,16 @@ if {[catch {
 
 puts "\[INFO\] Running detailed routing..."
 
-detailed_route
+if {[catch {
+
+    detailed_route
+
+} err]} {
+
+    puts "\[ERROR\] Detailed routing failed:"
+    puts "$err"
+    exit 1
+}
 
 # ----------------------------------------------------------------------
 # 18. Detailed-route wirelength
@@ -455,7 +449,7 @@ if {[catch {
 }
 
 # ----------------------------------------------------------------------
-# 19. Combined wirelength report
+# 19. Final wirelength
 # ----------------------------------------------------------------------
 
 if {[catch {
@@ -474,6 +468,8 @@ if {[catch {
 # 20. Routing status
 # ----------------------------------------------------------------------
 
+puts "\[INFO\] Generating routing status report..."
+
 if {[catch {
 
     report_route_status \
@@ -486,7 +482,42 @@ if {[catch {
 }
 
 # ----------------------------------------------------------------------
-# 21. Timing reports
+# 21. FINAL DESIGN AREA
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Generating final design area report..."
+
+if {[catch {
+
+    report_design_area \
+        > "${run_dir}/design_area.rpt"
+
+} err]} {
+
+    puts "\[WARNING\] Final design area report failed:"
+    puts "$err"
+}
+
+# ----------------------------------------------------------------------
+# 22. CELL USAGE
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Generating cell usage report..."
+
+if {[catch {
+
+    report_cell_usage \
+        -verbose \
+        -file "${run_dir}/cell_usage.rpt"
+
+} err]} {
+
+    puts "\[WARNING\] Cell usage report failed:"
+    puts "$err"
+}
+
+# ----------------------------------------------------------------------
+# 23. SETUP TIMING
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Generating setup timing report..."
@@ -504,6 +535,10 @@ if {[catch {
     puts "$err"
 }
 
+# ----------------------------------------------------------------------
+# 24. HOLD TIMING
+# ----------------------------------------------------------------------
+
 puts "\[INFO\] Generating hold timing report..."
 
 if {[catch {
@@ -520,7 +555,37 @@ if {[catch {
 }
 
 # ----------------------------------------------------------------------
-# 22. Final database
+# 25. Explicit WNS/TNS reports
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Generating setup WNS/TNS..."
+
+if {[catch {
+
+    report_wns > "${run_dir}/wns_setup.rpt"
+    report_tns > "${run_dir}/tns_setup.rpt"
+
+} err]} {
+
+    puts "\[WARNING\] Setup WNS/TNS report failed:"
+    puts "$err"
+}
+
+puts "\[INFO\] Generating hold WNS/TNS..."
+
+if {[catch {
+
+    report_wns -min > "${run_dir}/wns_hold.rpt"
+    report_tns -min > "${run_dir}/tns_hold.rpt"
+
+} err]} {
+
+    puts "\[WARNING\] Hold WNS/TNS report failed:"
+    puts "$err"
+}
+
+# ----------------------------------------------------------------------
+# 26. Final database
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Saving final database..."
@@ -531,12 +596,47 @@ write_db \
 if {![file exists "${run_dir}/final.odb"]} {
 
     puts "\[ERROR\] final.odb was not created."
-
     exit 1
 }
 
 # ----------------------------------------------------------------------
-# 23. Final summary
+# 27. Verify generated files
+# ----------------------------------------------------------------------
+
+puts ""
+puts "=============================================="
+puts "VERIFYING GENERATED REPORTS"
+puts "=============================================="
+
+foreach f [list \
+    "${run_dir}/final.odb" \
+    "${run_dir}/route.guide" \
+    "${run_dir}/congestion.rpt" \
+    "${run_dir}/wirelength_global.rpt" \
+    "${run_dir}/wirelength_detailed.rpt" \
+    "${run_dir}/wirelength_final.rpt" \
+    "${run_dir}/route_status_final.rpt" \
+    "${run_dir}/design_area.rpt" \
+    "${run_dir}/cell_usage.rpt" \
+    "${run_dir}/timing_setup.rpt" \
+    "${run_dir}/timing_hold.rpt" \
+    "${run_dir}/wns_setup.rpt" \
+    "${run_dir}/tns_setup.rpt" \
+    "${run_dir}/wns_hold.rpt" \
+    "${run_dir}/tns_hold.rpt"] {
+
+    if {[file exists $f]} {
+
+        puts "\[OK\] $f"
+
+    } else {
+
+        puts "\[WARNING\] Missing: $f"
+    }
+}
+
+# ----------------------------------------------------------------------
+# 28. Final summary
 # ----------------------------------------------------------------------
 
 puts ""
@@ -553,6 +653,13 @@ puts "  wirelength_global.rpt"
 puts "  wirelength_detailed.rpt"
 puts "  wirelength_final.rpt"
 puts "  route_status_final.rpt"
+puts "  placement_area.rpt"
+puts "  design_area.rpt"
+puts "  cell_usage.rpt"
 puts "  timing_setup.rpt"
 puts "  timing_hold.rpt"
+puts "  wns_setup.rpt"
+puts "  tns_setup.rpt"
+puts "  wns_hold.rpt"
+puts "  tns_hold.rpt"
 puts "=============================================="

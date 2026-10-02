@@ -1,22 +1,95 @@
-# Read SystemVerilog RTL files
-read_verilog -sv -DARRAY_SIZE=$ENV{ARRAY_SIZE} -DDATA_WIDTH=$ENV{DATA_WIDTH} rtl/pe.v
-read_verilog -sv -DARRAY_SIZE=$ENV{ARRAY_SIZE} -DDATA_WIDTH=$ENV{DATA_WIDTH} rtl/systolic_array.v
+```text
+# ================================================================
+# Systolic Array Yosys Synthesis
+#
+# These placeholders are replaced by GitHub Actions before
+# Yosys executes this script.
+#
+# __ARRAY_SIZE__
+# __DATA_WIDTH__
+# __LIB_FILE__
+# __RUN_TAG__
+# ================================================================
+
+
+# ------------------------------------------------
+# Read SystemVerilog RTL
+# ------------------------------------------------
+
+read_verilog -sv \
+  -DARRAY_SIZE=__ARRAY_SIZE__ \
+  -DDATA_WIDTH=__DATA_WIDTH__ \
+  rtl/pe.v
+
+read_verilog -sv \
+  -DARRAY_SIZE=__ARRAY_SIZE__ \
+  -DDATA_WIDTH=__DATA_WIDTH__ \
+  rtl/systolic_array.v
+
+
+# ------------------------------------------------
+# Set top module
+# ------------------------------------------------
 
 hierarchy -top systolic_array
+
+
+# ------------------------------------------------
+# RTL synthesis
+# ------------------------------------------------
+
 proc
+
 flatten
-opt
-fsm
-opt
-memory
-opt
-techmap
+
 opt
 
-dfflibmap -liberty $ENV{LIB_FILE}
-abc -liberty $ENV{LIB_FILE}
+fsm
+
 opt
+
+memory
+
+opt
+
+techmap
+
+opt
+
+
+# ------------------------------------------------
+# Technology mapping
+# ------------------------------------------------
+
+dfflibmap -liberty "__LIB_FILE__"
+
+abc -liberty "__LIB_FILE__"
+
+
+# ------------------------------------------------
+# Final optimization
+# ------------------------------------------------
+
+opt
+
 clean
 
-write_verilog -noattr systolic_project/synth/systolic_netlist.v
-tee -o "systolic_project/runs/$ENV{RUN_TAG}/yosys_synth_area.rpt" stat -liberty $ENV{LIB_FILE}
+
+# ------------------------------------------------
+# Write synthesized netlist
+# ------------------------------------------------
+
+write_verilog \
+  -noattr \
+  systolic_project/synth/systolic_netlist.v
+
+
+# ------------------------------------------------
+# Generate synthesis statistics
+# ------------------------------------------------
+
+tee -o \
+  "systolic_project/runs/__RUN_TAG__/yosys_synth_area.rpt" \
+  stat \
+  -liberty "__LIB_FILE__"
+```

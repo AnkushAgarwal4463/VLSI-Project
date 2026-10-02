@@ -1,20 +1,6 @@
-```text
 # ================================================================
 # Systolic Array Yosys Synthesis
-#
-# These placeholders are replaced by GitHub Actions before
-# Yosys executes this script.
-#
-# __ARRAY_SIZE__
-# __DATA_WIDTH__
-# __LIB_FILE__
-# __RUN_TAG__
 # ================================================================
-
-
-# ------------------------------------------------
-# Read SystemVerilog RTL
-# ------------------------------------------------
 
 read_verilog -sv \
   -DARRAY_SIZE=__ARRAY_SIZE__ \
@@ -26,70 +12,41 @@ read_verilog -sv \
   -DDATA_WIDTH=__DATA_WIDTH__ \
   rtl/systolic_array.v
 
-
-# ------------------------------------------------
-# Set top module
-# ------------------------------------------------
-
 hierarchy -top systolic_array
 
-
-# ------------------------------------------------
-# RTL synthesis
-# ------------------------------------------------
-
 proc
-
 flatten
-
 opt
 
 fsm
-
 opt
 
 memory
-
 opt
 
 techmap
-
 opt
-
-
-# ------------------------------------------------
-# Technology mapping
-# ------------------------------------------------
 
 dfflibmap -liberty "__LIB_FILE__"
 
 abc -liberty "__LIB_FILE__"
 
-
-# ------------------------------------------------
-# Final optimization
-# ------------------------------------------------
-
 opt
-
 clean
 
-
 # ------------------------------------------------
-# Write synthesized netlist
+# Netlist
 # ------------------------------------------------
 
 write_verilog \
   -noattr \
   systolic_project/synth/systolic_netlist.v
 
-
 # ------------------------------------------------
-# Generate synthesis statistics
+# Synthesis statistics
 # ------------------------------------------------
 
 tee -o \
   "systolic_project/runs/__RUN_TAG__/yosys_synth_area.rpt" \
   stat \
   -liberty "__LIB_FILE__"
-```

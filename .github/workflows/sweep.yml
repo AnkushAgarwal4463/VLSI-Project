@@ -3,7 +3,7 @@ name: Systolic Array Congestion Sweep
 on:
   workflow_dispatch:
     inputs:
-      test_mode:
+      test_mode: 
         description: "Select experiment size"
         required: true
         type: choice

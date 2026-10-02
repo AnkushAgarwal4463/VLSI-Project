@@ -122,17 +122,31 @@ foreach f [list $tech_lef $std_cell_lef $lib_file $netlist_verilog] {
 # ----------------------------------------------------------------------
 # 6. Read technology
 # ----------------------------------------------------------------------
+puts "===== TECH LEF SITES ====="
 
+set fp [open $tech_lef r]
+while {[gets $fp line] >= 0} {
+    if {[string match "*SITE*" $line]} {
+        puts $line
+    }
+}
+close $fp
+
+puts "===== STD CELL LEF SITES ====="
+
+set fp [open $std_cell_lef r]
+while {[gets $fp line] >= 0} {
+    if {[string match "*SITE*" $line]} {
+        puts $line
+    }
+}
+close $fp
+
+puts "=========================="
 puts "\[INFO\] Reading technology LEF..."
 
 read_lef -tech $tech_lef
 read_lef $std_cell_lef
-
-puts "===== OPENROAD SITES ====="
-foreach site [$::ord::get_db_tech getSites] {
-    puts "SITE FROM DB: [$site getName]"
-}
-puts "=========================="
 
 puts "\[INFO\] Reading Liberty..."
 

@@ -241,7 +241,6 @@ set die_y1 \
 initialize_floorplan \
     -die_area "$die_x0 $die_y0 $die_x1 $die_y1" \
     -core_area "$core_x0 $core_y0 $core_x1 $core_y1" \
-    -site unithd
 
 make_tracks
 

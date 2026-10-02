@@ -3,7 +3,7 @@ name: Systolic Array Congestion Sweep
 on:
   workflow_dispatch:
     inputs:
-      test_mode:
+      test_mode: 
         description: "Select experiment size"
         required: true
         type: choice
@@ -39,52 +39,473 @@ jobs:
 
           set -euo pipefail
 
+          TEST_MATRIX='[
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 5.0
+            }
+          ]'
+
+          FULL_MATRIX='[
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 20,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 20,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 5.0
+            },
+
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 20,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 20,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 5.0
+            },
+
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 20,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 20,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 5.0
+            },
+
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 20,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 20,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 5.0
+            },
+
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 20,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 20,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 5.0
+            },
+
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 20,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 20,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 5.0
+            }
+          ]'
+
           if [ "$TEST_MODE" = "test_1_run" ]; then
-
             echo "Selected: TEST RUN"
-
-            MATRIX='[
-              {
-                "array_size": 4,
-                "data_width": 8,
-                "utilization": 30,
-                "clk_period": 5.0
-              }
-            ]'
-
+            JSON_OUT=$(printf '%s' "$TEST_MATRIX" | jq -c .)
           else
-
             echo "Selected: FULL 72-RUN SWEEP"
-
-            MATRIX=$(jq -cn '
-              [4,8,16][] as $array_size |
-              [8,16][] as $data_width |
-              [20,30,40,50,60,70][] as $utilization |
-              [2.0,5.0][] as $clk_period |
-              {
-                array_size: $array_size,
-                data_width: $data_width,
-                utilization: $utilization,
-                clk_period: $clk_period
-              }
-            ')
-
+            JSON_OUT=$(printf '%s' "$FULL_MATRIX" | jq -c .)
           fi
 
-          COUNT=$(printf '%s' "$MATRIX" | jq length)
+          COUNT=$(printf '%s' "$JSON_OUT" | jq length)
 
-          echo "========================================"
-          echo "EXPERIMENT MATRIX"
-          echo "========================================"
           echo "Number of configurations: $COUNT"
-          echo "========================================"
 
           if [ "$TEST_MODE" = "full_72_run" ] && [ "$COUNT" -ne 72 ]; then
-            echo "ERROR: Expected exactly 72 configurations."
+            echo "ERROR: Full sweep does not contain 72 configurations."
             exit 1
           fi
 
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "matrix=$JSON_OUT" >> "$GITHUB_OUTPUT"
 
 
   # ================================================================
@@ -107,9 +528,6 @@ jobs:
 
     steps:
 
-      # --------------------------------------------------------------
-      # Checkout
-      # --------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -144,14 +562,13 @@ jobs:
 
 
       # --------------------------------------------------------------
-      # Install OpenROAD / Yosys / SKY130
+      # Toolchain
       # --------------------------------------------------------------
       - name: Install toolchain
         if: steps.cache-conda.outputs.cache-hit != 'true'
         timeout-minutes: 40
         shell: bash
         run: |
-
           set -euo pipefail
 
           curl -Ls \
@@ -169,21 +586,13 @@ jobs:
             yosys \
             fmt=8
 
-
-      # --------------------------------------------------------------
-      # PATH
-      # --------------------------------------------------------------
       - name: Add toolchain to PATH
         shell: bash
         run: |
 
-          set -euo pipefail
-
           echo "$(pwd)/conda-env/bin" >> "$GITHUB_PATH"
           echo "$(pwd)/conda-env/lib" >> "$GITHUB_PATH"
-
-          echo "LD_LIBRARY_PATH=$(pwd)/conda-env/lib:${LD_LIBRARY_PATH:-}" \
-            >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$(pwd)/conda-env/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
 
 
       # --------------------------------------------------------------
@@ -200,12 +609,11 @@ jobs:
           echo "UTIL=${{ matrix.utilization }}" >> "$GITHUB_ENV"
           echo "CLK_PERIOD=${{ matrix.clk_period }}" >> "$GITHUB_ENV"
 
-          echo "RUN_TAG=sys${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.utilization }}_clk${{ matrix.clk_period }}" \
-            >> "$GITHUB_ENV"
+          echo "RUN_TAG=sys${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.utilization }}_clk${{ matrix.clk_period }}" >> "$GITHUB_ENV"
 
 
       # --------------------------------------------------------------
-      # Find SKY130 Liberty
+      # Find Liberty
       # --------------------------------------------------------------
       - name: Locate SKY130 Liberty
         shell: bash
@@ -216,20 +624,16 @@ jobs:
           echo "Searching for SKY130 Liberty file..."
 
           LIB=$(find ./conda-env -type f \
-            \( \
-              -name "sky130_fd_sc_hd__tt_025C_5v00.lib" \
-              -o -name "sky130_fd_sc_hd__tt_025C_5v00.lib.gz" \
-              -o -name "sky130_fd_sc_hd*.lib" \
-              -o -name "sky130_fd_sc_hd*.lib.gz" \
-            \) \
+            \( -name "sky130_fd_sc_hd__tt_025C_5v00.lib" \
+               -o -name "sky130_fd_sc_hd__tt_025C_5v00.lib.gz" \
+               -o -name "sky130_fd_sc_hd*.lib" \
+               -o -name "sky130_fd_sc_hd*.lib.gz" \) \
             -print | head -n 1)
 
           if [ -z "$LIB" ]; then
-
             echo "ERROR: SKY130 Liberty file not found."
 
             echo "Available SKY130 files:"
-
             find ./conda-env -type f \
               | grep -i sky130 \
               | head -100 || true
@@ -241,7 +645,6 @@ jobs:
           echo "$LIB"
 
           if [[ "$LIB" == *.lib.gz ]]; then
-
             echo "Liberty is compressed."
             echo "Decompressing..."
 
@@ -259,7 +662,7 @@ jobs:
 
 
       # --------------------------------------------------------------
-      # Verify toolchain
+      # Verify
       # --------------------------------------------------------------
       - name: Verify toolchain
         shell: bash
@@ -295,10 +698,10 @@ jobs:
 
           set -euo pipefail
 
-          mkdir -p \
+          /usr/bin/mkdir -p \
             "systolic_project/synth"
 
-          mkdir -p \
+          /usr/bin/mkdir -p \
             "systolic_project/runs/${RUN_TAG}"
 
           sed \
@@ -320,14 +723,13 @@ jobs:
             "systolic_project/synth/systolic_netlist.v"
 
 
-      # ================================================================
-      # OPENROAD
-      # ================================================================
+# ================================================================
+# OPENROAD
+# ================================================================
       - name: Run OpenROAD
         timeout-minutes: 30
         shell: bash
         run: |
-
           set -euo pipefail
 
           RUN_DIR="systolic_project/runs/${RUN_TAG}"
@@ -335,102 +737,95 @@ jobs:
           openroad \
             -exit \
             scripts/flow.tcl \
-            2>&1 | tee \
-            "${RUN_DIR}/openroad_log.txt"
+            2>&1 | tee "${RUN_DIR}/openroad_log.txt"
 
-          test -f \
-            "${RUN_DIR}/final.odb"
+          test -f "${RUN_DIR}/final.odb"
 
 
-      # ================================================================
-      # DEBUG GENERATED REPORTS
-      # ================================================================
-      - name: Inspect generated reports
+      - name: Debug generated reports
         shell: bash
         run: |
-
           set -euo pipefail
 
           RUN_DIR="systolic_project/runs/${RUN_TAG}"
 
-          echo "=================================================="
+          echo "========================================"
           echo "RUN DIRECTORY"
-          echo "=================================================="
+          echo "========================================"
 
           find "$RUN_DIR" \
-            -maxdepth 1 \
             -type f \
-            -printf '%f\n' \
-            | sort
-
+            -print | sort
 
           echo
-          echo "=================================================="
+          echo "========================================"
           echo "FILE SIZES"
-          echo "=================================================="
+          echo "========================================"
 
           find "$RUN_DIR" \
-            -maxdepth 1 \
             -type f \
-            -printf '%s bytes  %f\n' \
-            | sort
-
-
-          REPORTS="
-          design_area.rpt
-          placement_area.rpt
-          cell_usage.rpt
-          wirelength_global.rpt
-          wirelength_detailed.rpt
-          wirelength_final.rpt
-          congestion.rpt
-          route_status_final.rpt
-          timing_setup.rpt
-          timing_hold.rpt
-          wns_setup.rpt
-          tns_setup.rpt
-          wns_hold.rpt
-          tns_hold.rpt
-          "
-
-
-          for FILE in $REPORTS
-          do
-
-            echo
-            echo "=================================================="
-            echo "REPORT: $FILE"
-            echo "=================================================="
-
-            if [ -f "$RUN_DIR/$FILE" ]; then
-
-              cat "$RUN_DIR/$FILE"
-
-            else
-
-              echo "FILE NOT FOUND"
-
-            fi
-
-          done
-
+            -printf '%s bytes  %p\n' | sort
 
           echo
-          echo "=================================================="
+          echo "========================================"
           echo "OPENROAD LOG - LAST 150 LINES"
-          echo "=================================================="
+          echo "========================================"
 
           if [ -f "${RUN_DIR}/openroad_log.txt" ]; then
-
-            tail -150 \
-              "${RUN_DIR}/openroad_log.txt"
-
+            tail -150 "${RUN_DIR}/openroad_log.txt"
           else
-
             echo "openroad_log.txt NOT FOUND"
-
           fi
 
+          echo
+          echo "========================================"
+          echo "REPORT FILES"
+          echo "========================================"
+
+          find "$RUN_DIR" \
+            -type f \
+            \( -name "*.rpt" -o -name "*.report" \) \
+            -print | sort
+            
+      - name: Inspect generated reports
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RUN_DIR="systolic_project/runs/${RUN_TAG}"
+      
+          echo "=================================================="
+          echo "GENERATED FILES"
+          echo "=================================================="
+          find "$RUN_DIR" -maxdepth 1 -type f -printf '%f\n' | sort
+
+          for f in \
+            design_area.rpt \
+            placement_area.rpt \
+            cell_usage.rpt \
+            wirelength_global.rpt \
+            wirelength_detailed.rpt \
+            wirelength_final.rpt \
+            congestion.rpt \
+            route_status_final.rpt \
+            timing_setup.rpt \
+            timing_hold.rpt \
+            wns_setup.rpt \
+            tns_setup.rpt \
+            wns_hold.rpt \
+            tns_hold.rpt
+          do
+            echo
+            echo "=================================================="
+            echo "$f"
+            echo "=================================================="
+
+            if [ -f "$RUN_DIR/$f" ]; then
+              cat "$RUN_DIR/$f"
+            else
+              echo "FILE NOT FOUND"
+            fi
+          done
 
       # ================================================================
       # FEATURE EXTRACTION
@@ -447,24 +842,14 @@ jobs:
           test -f \
             "systolic_project/runs/${RUN_TAG}/features.json"
 
-
-      # ================================================================
-      # SHOW FEATURES
-      # ================================================================
       - name: Show extracted features
         shell: bash
         run: |
-
-          set -euo pipefail
-
           echo "========================================"
           echo "FEATURES.JSON"
           echo "========================================"
 
-          cat \
-            "systolic_project/runs/${RUN_TAG}/features.json"
-
-
+          cat "systolic_project/runs/${RUN_TAG}/features.json"
       # ================================================================
       # UPLOAD
       # ================================================================
@@ -490,34 +875,24 @@ jobs:
           echo "### Run Summary: ${RUN_TAG}" \
             >> "$GITHUB_STEP_SUMMARY"
 
-
           if [ -f \
             "systolic_project/runs/${RUN_TAG}/final.odb"
           ]; then
-
             echo "- final.odb: YES" \
               >> "$GITHUB_STEP_SUMMARY"
-
           else
-
             echo "- final.odb: NO" \
               >> "$GITHUB_STEP_SUMMARY"
-
           fi
-
 
           if [ -f \
             "systolic_project/runs/${RUN_TAG}/features.json"
           ]; then
-
             echo "- 17-feature JSON: YES" \
               >> "$GITHUB_STEP_SUMMARY"
-
           else
-
             echo "- 17-feature JSON: NO" \
               >> "$GITHUB_STEP_SUMMARY"
-
           fi
 
 
@@ -534,39 +909,23 @@ jobs:
 
     steps:
 
-      # --------------------------------------------------------------
-      # Checkout
-      # --------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
-      # --------------------------------------------------------------
-      # Python
-      # --------------------------------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
 
-      # --------------------------------------------------------------
-      # Dependencies
-      # --------------------------------------------------------------
       - name: Install dependencies
         shell: bash
         run: |
-
-          set -euo pipefail
-
           python -m pip install --upgrade pip
-
           pip install pandas
 
 
-      # --------------------------------------------------------------
-      # Download artifacts
-      # --------------------------------------------------------------
       - name: Download all result artifacts
         uses: actions/download-artifact@v4
         with:
@@ -574,31 +933,24 @@ jobs:
           merge-multiple: true
 
 
-      # --------------------------------------------------------------
-      # Show downloaded files
-      # --------------------------------------------------------------
       - name: Show downloaded files
         shell: bash
         run: |
 
           echo "Downloaded files:"
-
           find downloaded_artifacts \
             -type f \
             -print \
             | sort
 
 
-      # --------------------------------------------------------------
-      # Aggregate JSON
-      # --------------------------------------------------------------
       - name: Combine JSON features into CSV
         shell: bash
         run: |
 
           set -euo pipefail
 
-          mkdir -p summary_output
+          /usr/bin/mkdir -p summary_output
 
           python3 scripts/aggregate_dataset.py \
             --runs_dir downloaded_artifacts \
@@ -606,9 +958,6 @@ jobs:
             summary_output/systolic_array_sweep_dataset.csv
 
 
-      # --------------------------------------------------------------
-      # Verify CSV
-      # --------------------------------------------------------------
       - name: Verify CSV
         shell: bash
         run: |
@@ -631,9 +980,6 @@ jobs:
           echo "Rows generated: $ROWS"
 
 
-      # --------------------------------------------------------------
-      # Upload CSV
-      # --------------------------------------------------------------
       - name: Upload Aggregated CSV Dataset
         uses: actions/upload-artifact@v4
         with:
@@ -642,9 +988,6 @@ jobs:
           if-no-files-found: error
 
 
-      # --------------------------------------------------------------
-      # Aggregate summary
-      # --------------------------------------------------------------
       - name: Aggregate summary
         if: always()
         shell: bash
@@ -674,3 +1017,5 @@ jobs:
               >> "$GITHUB_STEP_SUMMARY"
 
           fi
+
+

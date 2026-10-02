@@ -742,7 +742,36 @@ jobs:
           test -f \
             "systolic_project/runs/${RUN_TAG}/final.odb"
 
+      - name: Debug generated reports
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "RUN DIRECTORY"
+          echo "========================================"
 
+          find "systolic_project/runs/${RUN_TAG}" \
+            -type f \
+            -print | sort
+
+          echo
+          echo "========================================"
+          echo "FILE SIZES"
+          echo "========================================"
+
+          find "systolic_project/runs/${RUN_TAG}" \
+            -type f \
+            -printf '%s bytes  %p\n' | sort
+
+          echo
+          echo "========================================"
+          echo "OPENROAD LOG - LAST 150 LINES"
+          echo "========================================"
+
+          if [ -f "systolic_project/runs/${RUN_TAG}/openroad.log" ]; then
+            tail -150 "systolic_project/runs/${RUN_TAG}/openroad.log"
+          else
+            echo "openroad.log NOT FOUND"
+          fi
       # ================================================================
       # FEATURE EXTRACTION
       # ================================================================
@@ -758,7 +787,14 @@ jobs:
           test -f \
             "systolic_project/runs/${RUN_TAG}/features.json"
 
+      - name: Show extracted features
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "FEATURES.JSON"
+          echo "========================================"
 
+          cat "systolic_project/runs/${RUN_TAG}/features.json"
       # ================================================================
       # UPLOAD
       # ================================================================

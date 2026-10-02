@@ -46,7 +46,4 @@ write_verilog \
 # Synthesis statistics
 # ------------------------------------------------
 
-tee -o \
-  "systolic_project/runs/__RUN_TAG__/yosys_synth_area.rpt" \
-  stat \
-  -liberty "__LIB_FILE__"
+stat -liberty "__LIB_FILE__"

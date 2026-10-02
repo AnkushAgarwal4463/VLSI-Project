@@ -3,7 +3,10 @@ import glob
 import json
 import pandas as pd
 
-# Define the full 17-feature schema with default fallback types
+# ================================================================
+# Dataset schema
+# ================================================================
+
 SCHEMA_DEFAULTS = {
     "run_tag": "unknown",
     "array_size": 0,
@@ -26,59 +29,257 @@ SCHEMA_DEFAULTS = {
 
 FEATURE_COLUMNS = list(SCHEMA_DEFAULTS.keys())
 
-def build_clean_dataset(runs_dir="systolic_project/runs", output_csv="summary_output/dataset.csv"):
-    # Target feature JSON files recursively across all run subdirectories
-    json_files = sorted(list(set(glob.glob(os.path.join(runs_dir, "**", "*_features.json"), recursive=True))))
-    
+
+# ================================================================
+# Helper: convert values to expected types
+# ================================================================
+
+def clean_value(value, default):
+    if value is None:
+        return default
+
+    try:
+        if isinstance(default, float):
+            return float(value)
+
+        if isinstance(default, int):
+            return int(value)
+
+        return str(value)
+
+    except (ValueError, TypeError):
+        return default
+
+
+# ================================================================
+# Main aggregation function
+# ================================================================
+
+def build_clean_dataset(
+    runs_dir="systolic_project/runs",
+    output_csv="summary_output/systolic_array_sweep_dataset.csv"
+):
+
+    print("=" * 70)
+    print("SYSTOLIC ARRAY DATASET AGGREGATION")
+    print("=" * 70)
+
+    print(f"[INFO] Scanning: {runs_dir}")
+
+    # ------------------------------------------------------------
+    # Find BOTH possible JSON naming conventions:
+    #
+    # 1. Old format:
+    #       runs/run_tag_features.json
+    #
+    # 2. New format:
+    #       runs/run_tag/features.json
+    # ------------------------------------------------------------
+
+    patterns = [
+        os.path.join(runs_dir, "**", "*_features.json"),
+        os.path.join(runs_dir, "**", "features.json")
+    ]
+
+    json_files = set()
+
+    for pattern in patterns:
+        json_files.update(
+            glob.glob(pattern, recursive=True)
+        )
+
+    json_files = sorted(json_files)
+
+    print(f"[INFO] Found {len(json_files)} feature JSON files")
+
+    # ------------------------------------------------------------
+    # Read feature files
+    # ------------------------------------------------------------
+
     seen_tags = set()
     records = []
 
-    print(f"[INFO] Scanning '{runs_dir}' for feature JSON files...")
-
     for fpath in json_files:
+
         try:
             with open(fpath, "r") as f:
                 data = json.load(f)
-                
-                # Extract run tag for deduplication
-                tag = data.get("run_tag")
-                if not tag or tag in seen_tags:
-                    continue
-                
-                seen_tags.add(tag)
-                
-                # Fill missing keys to guarantee all 17 features are represented
-                clean_record = {}
-                for key, default_val in SCHEMA_DEFAULTS.items():
-                    val = data.get(key)
-                    if val is None:
-                        clean_record[key] = default_val
-                    else:
-                        # Cast to match default type
-                        clean_record[key] = type(default_val)(val) if not isinstance(default_val, float) else float(val)
-                
-                records.append(clean_record)
+
+            if not isinstance(data, dict):
+                print(f"[WARNING] Invalid JSON structure: {fpath}")
+                continue
+
+            # ----------------------------------------------------
+            # Determine run tag
+            # ----------------------------------------------------
+
+            tag = data.get("run_tag")
+
+            if not tag:
+                # Try deriving it from the directory name
+                parent_dir = os.path.basename(
+                    os.path.dirname(fpath)
+                )
+
+                if parent_dir:
+                    tag = parent_dir
+
+            if not tag:
+                print(f"[WARNING] No run_tag found: {fpath}")
+                continue
+
+            # ----------------------------------------------------
+            # Deduplicate
+            # ----------------------------------------------------
+
+            if tag in seen_tags:
+                print(
+                    f"[WARNING] Duplicate run_tag '{tag}' skipped: "
+                    f"{fpath}"
+                )
+                continue
+
+            seen_tags.add(tag)
+
+            # ----------------------------------------------------
+            # Build clean record
+            # ----------------------------------------------------
+
+            clean_record = {}
+
+            for key, default_value in SCHEMA_DEFAULTS.items():
+
+                value = data.get(key)
+
+                clean_record[key] = clean_value(
+                    value,
+                    default_value
+                )
+
+            records.append(clean_record)
+
+            print(
+                f"[OK] {tag}"
+            )
+
+        except json.JSONDecodeError as e:
+
+            print(
+                f"[WARNING] Invalid JSON in {fpath}: {e}"
+            )
 
         except Exception as e:
-            print(f"[WARNING] Could not parse {fpath}: {e}")
 
+            print(
+                f"[WARNING] Could not parse {fpath}: {e}"
+            )
+
+    # ------------------------------------------------------------
     # Build DataFrame
-    if records:
-        df = pd.DataFrame(records)[FEATURE_COLUMNS]
-        
-        # Sort systematically by design parameter matrix
-        sort_cols = [c for c in ["array_size", "data_width", "utilization", "clk_period_ns"] if c in df.columns]
-        if sort_cols:
-            df = df.sort_values(by=sort_cols).reset_index(drop=True)
-    else:
-        print("[WARNING] No JSON feature files were found. Initializing empty DataFrame with 17-feature schema.")
-        df = pd.DataFrame(columns=FEATURE_COLUMNS)
+    # ------------------------------------------------------------
 
-    # Ensure output directory exists and export CSV
-    os.makedirs(os.path.dirname(output_csv), exist_ok=True)
-    df.to_csv(output_csv, index=False)
-    
-    print(f"[SUCCESS] Written {len(df)} records across {len(FEATURE_COLUMNS)} features to '{output_csv}'")
+    if records:
+
+        df = pd.DataFrame(records)
+
+        # Guarantee column order
+        df = df[FEATURE_COLUMNS]
+
+        # --------------------------------------------------------
+        # Sort according to design-space parameters
+        # --------------------------------------------------------
+
+        sort_cols = [
+            "array_size",
+            "data_width",
+            "utilization",
+            "clk_period_ns"
+        ]
+
+        df = df.sort_values(
+            by=sort_cols,
+            kind="stable"
+        ).reset_index(drop=True)
+
+    else:
+
+        print(
+            "[WARNING] No feature JSON files were found."
+        )
+
+        df = pd.DataFrame(
+            columns=FEATURE_COLUMNS
+        )
+
+    # ------------------------------------------------------------
+    # Create output directory
+    # ------------------------------------------------------------
+
+    output_dir = os.path.dirname(output_csv)
+
+    if output_dir:
+        os.makedirs(
+            output_dir,
+            exist_ok=True
+        )
+
+    # ------------------------------------------------------------
+    # Write CSV
+    # ------------------------------------------------------------
+
+    df.to_csv(
+        output_csv,
+        index=False
+    )
+
+    # ------------------------------------------------------------
+    # Dataset summary
+    # ------------------------------------------------------------
+
+    print()
+    print("=" * 70)
+    print("DATASET SUMMARY")
+    print("=" * 70)
+
+    print(f"Records       : {len(df)}")
+    print(f"Features      : {len(FEATURE_COLUMNS)}")
+    print(f"Output        : {output_csv}")
+
+    if len(df) > 0:
+
+        print()
+        print("Design-space coverage:")
+
+        print(
+            f"  Array sizes : "
+            f"{sorted(df['array_size'].unique().tolist())}"
+        )
+
+        print(
+            f"  Data widths : "
+            f"{sorted(df['data_width'].unique().tolist())}"
+        )
+
+        print(
+            f"  Utilization : "
+            f"{sorted(df['utilization'].unique().tolist())}"
+        )
+
+        print(
+            f"  Clock periods: "
+            f"{sorted(df['clk_period_ns'].unique().tolist())}"
+        )
+
+    print("=" * 70)
+    print(
+        f"[SUCCESS] Written {len(df)} records "
+        f"across {len(FEATURE_COLUMNS)} features"
+    )
+
+
+# ================================================================
+# Entry point
+# ================================================================
 
 if __name__ == "__main__":
     build_clean_dataset()

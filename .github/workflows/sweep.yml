@@ -1,3 +1,4 @@
+```yaml
 name: Systolic Array Congestion Sweep
 
 on:
@@ -12,69 +13,149 @@ on:
           - 'test_1_run'
           - 'full_sweep'
 
-# Grant upload permissions to GITHUB_TOKEN
 permissions:
   contents: read
   actions: write
 
 jobs:
-  # ====================================================================
-  # JOB 1: Generate Matrix Dynamically
-  # ====================================================================
+
+  # ================================================================
+  # JOB 1: Generate Matrix
+  # ================================================================
   generate-matrix:
     runs-on: ubuntu-latest
+
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+
     steps:
       - id: set-matrix
+        shell: bash
         run: |
-          # 1-Run Test Configuration
           TEST_MATRIX='[
-            {"array_size": 4, "data_width": 8, "utilization": 30, "clk_period": 3.0}
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 3.0
+            }
           ]'
 
-          # Full 72-Run Sweep Configurations
           FULL_MATRIX='[
-            {"array_size": 4, "data_width": 8, "utilization": 30, "clk_period": 3.0},
-            {"array_size": 4, "data_width": 8, "utilization": 50, "clk_period": 5.0},
-            {"array_size": 4, "data_width": 16, "utilization": 30, "clk_period": 3.0},
-            {"array_size": 4, "data_width": 16, "utilization": 50, "clk_period": 5.0},
-            {"array_size": 8, "data_width": 8, "utilization": 40, "clk_period": 5.0},
-            {"array_size": 8, "data_width": 8, "utilization": 60, "clk_period": 8.0},
-            {"array_size": 8, "data_width": 16, "utilization": 40, "clk_period": 5.0},
-            {"array_size": 8, "data_width": 16, "utilization": 60, "clk_period": 8.0},
-            {"array_size": 16, "data_width": 8, "utilization": 50, "clk_period": 10.0},
-            {"array_size": 16, "data_width": 8, "utilization": 70, "clk_period": 15.0},
-            {"array_size": 16, "data_width": 16, "utilization": 50, "clk_period": 10.0},
-            {"array_size": 16, "data_width": 16, "utilization": 70, "clk_period": 15.0}
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 3.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 3.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 8.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 8.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 10.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 15.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 10.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 15.0
+            }
           ]'
 
-          if [ "${{ github.event.inputs.test_mode }}" == "test_1_run" ]; then
+          if [ "${{ github.event.inputs.test_mode }}" = "test_1_run" ]; then
             echo "Selected: 1-Run Fast Pipeline Test"
-            # Strip whitespace and line breaks for JSON parsing
             JSON_OUT=$(echo "$TEST_MATRIX" | jq -c .)
           else
             echo "Selected: Full Matrix Sweep"
             JSON_OUT=$(echo "$FULL_MATRIX" | jq -c .)
           fi
 
-          echo "matrix=$JSON_OUT" >> $GITHUB_OUTPUT
+          echo "matrix=$JSON_OUT" >> "$GITHUB_OUTPUT"
 
-  # ====================================================================
-  # JOB 2: Execute Sweep Matrix
-  # ====================================================================
+
+  # ================================================================
+  # JOB 2: Execute Sweep
+  # ================================================================
   run-sweep:
     needs: generate-matrix
+
     runs-on: ubuntu-latest
+
     timeout-minutes: 90
+
     strategy:
       fail-fast: false
       max-parallel: 16
+
       matrix:
         include: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
-    steps:
-      - uses: actions/checkout@v4
 
+    steps:
+
+      # ------------------------------------------------------------
+      # Checkout
+      # ------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ------------------------------------------------------------
+      # Cache Conda
+      # ------------------------------------------------------------
       - name: Cache Conda Toolchain
         id: cache-conda
         uses: actions/cache@v4
@@ -82,110 +163,279 @@ jobs:
           path: ./conda-env
           key: ${{ runner.os }}-condapdk-v4-diskfix
 
-      - name: Free up disk space before install
+
+      # ------------------------------------------------------------
+      # Free disk space
+      # ------------------------------------------------------------
+      - name: Free up disk space
         if: steps.cache-conda.outputs.cache-hit != 'true'
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
           sudo apt-get clean
 
+
+      # ------------------------------------------------------------
+      # Install OpenROAD / Yosys / SKY130
+      # ------------------------------------------------------------
       - name: Install toolchain
         if: steps.cache-conda.outputs.cache-hit != 'true'
         timeout-minutes: 40
+        shell: bash
         run: |
           set -euo pipefail
-          curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
-          
-          # Configure network retries and timeouts for mamba
-          ./bin/micromamba config set connect_timeout 60 --prefix ./conda-env || true
-          ./bin/micromamba config set read_timeout_secs 120 --prefix ./conda-env || true
-          ./bin/micromamba config set max_retries 5 --prefix ./conda-env || true
 
-          # Create environment using the litex-hub channel mirror
-          ./bin/micromamba create --yes --prefix ./conda-env \
+          curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
+            | tar -xvj bin/micromamba
+
+          ./bin/micromamba config set connect_timeout 60 \
+            --prefix ./conda-env || true
+
+          ./bin/micromamba config set read_timeout_secs 120 \
+            --prefix ./conda-env || true
+
+          ./bin/micromamba config set max_retries 5 \
+            --prefix ./conda-env || true
+
+          ./bin/micromamba create \
+            --yes \
+            --prefix ./conda-env \
             --channel https://conda.anaconda.org/litex-hub \
             --channel conda-forge \
             --channel main \
-            open_pdks.sky130a openroad yosys
+            open_pdks.sky130a \
+            openroad \
+            yosys
 
+
+      # ------------------------------------------------------------
+      # Add tools to PATH
+      # ------------------------------------------------------------
       - name: Add toolchain to PATH
-        run: echo "$(pwd)/conda-env/bin" >> $GITHUB_PATH
-
-      - name: Set run environment
+        shell: bash
         run: |
-          echo "ARRAY_SIZE=${{ matrix.array_size }}" >> $GITHUB_ENV
-          echo "DATA_WIDTH=${{ matrix.data_width }}" >> $GITHUB_ENV
-          echo "UTIL=${{ matrix.utilization }}" >> $GITHUB_ENV
-          echo "CLK_PERIOD=${{ matrix.clk_period }}" >> $GITHUB_ENV
-          echo "RUN_TAG=sys${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.utilization }}_clk${{ matrix.clk_period }}" >> $GITHUB_ENV
+          echo "$(pwd)/conda-env/bin" >> "$GITHUB_PATH"
 
+
+      # ------------------------------------------------------------
+      # Set environment variables
+      # ------------------------------------------------------------
+      - name: Set run environment
+        shell: bash
+        run: |
+          echo "ARRAY_SIZE=${{ matrix.array_size }}" >> "$GITHUB_ENV"
+          echo "DATA_WIDTH=${{ matrix.data_width }}" >> "$GITHUB_ENV"
+          echo "UTIL=${{ matrix.utilization }}" >> "$GITHUB_ENV"
+          echo "CLK_PERIOD=${{ matrix.clk_period }}" >> "$GITHUB_ENV"
+
+          echo "RUN_TAG=sys${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.utilization }}_clk${{ matrix.clk_period }}" >> "$GITHUB_ENV"
+
+
+      # ------------------------------------------------------------
+      # Locate SKY130 Liberty
+      # ------------------------------------------------------------
+      - name: Locate SKY130 Liberty file
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Searching for SKY130 Liberty file..."
+
+          LIB=$(find "$PWD/conda-env" \
+            -type f \
+            -name "sky130_fd_sc_hd__tt_025C_5v00.lib" \
+            | head -n 1)
+
+          if [ -z "$LIB" ]; then
+            echo "ERROR: SKY130 Liberty file not found."
+
+            echo "Available Liberty files:"
+            find "$PWD/conda-env" \
+              -type f \
+              \( -name "*.lib" -o -name "*.lib.gz" \) \
+              | head -50
+
+            exit 1
+          fi
+
+          echo "Found Liberty:"
+          echo "$LIB"
+
+          echo "LIB_FILE=$LIB" >> "$GITHUB_ENV"
+
+
+      # ------------------------------------------------------------
+      # Environment diagnostic
+      # ------------------------------------------------------------
+      - name: Verify toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "======================================"
+          echo "ARRAY_SIZE = $ARRAY_SIZE"
+          echo "DATA_WIDTH = $DATA_WIDTH"
+          echo "UTIL       = $UTIL"
+          echo "CLK_PERIOD = $CLK_PERIOD"
+          echo "RUN_TAG    = $RUN_TAG"
+          echo "LIB_FILE   = $LIB_FILE"
+          echo "======================================"
+
+          command -v yosys
+          command -v openroad
+
+          yosys -V
+          openroad -version
+
+          test -f "$LIB_FILE"
+
+
+      # ============================================================
+      # SYNTHESIS
+      # ============================================================
       - name: Synthesize
         timeout-minutes: 10
+        shell: bash
         run: |
-          mkdir -p systolic_project/synth "systolic_project/runs/${RUN_TAG}"
-          yosys -s scripts/synth.ys 2>&1 | tee "systolic_project/runs/${RUN_TAG}_synth_log.txt"
-          test -f systolic_project/synth/systolic_netlist.v 
+          set -euo pipefail
 
+          echo "Creating output directories..."
+
+          /usr/bin/mkdir -p "systolic_project/synth"
+          /usr/bin/mkdir -p "systolic_project/runs/${RUN_TAG}"
+
+          echo "Creating Yosys script..."
+
+          sed \
+            -e "s|__ARRAY_SIZE__|${ARRAY_SIZE}|g" \
+            -e "s|__DATA_WIDTH__|${DATA_WIDTH}|g" \
+            -e "s|__LIB_FILE__|${LIB_FILE}|g" \
+            -e "s|__RUN_TAG__|${RUN_TAG}|g" \
+            scripts/synth.ys > /tmp/synth.ys
+
+          echo "Generated synthesis script:"
+          cat /tmp/synth.ys
+
+          echo "Running Yosys..."
+
+          yosys \
+            -s /tmp/synth.ys \
+            2>&1 | tee \
+            "systolic_project/runs/${RUN_TAG}/synth_log.txt"
+
+          echo "Checking synthesized netlist..."
+
+          test -f \
+            "systolic_project/synth/systolic_netlist.v"
+
+          echo "Synthesis successful."
+
+
+      # ============================================================
+      # OPENROAD
+      # ============================================================
       - name: Run OpenROAD flow
         timeout-minutes: 30
+        shell: bash
         run: |
-          openroad -exit scripts/flow.tcl 2>&1 | tee systolic_project/runs/${RUN_TAG}_log.txt
-          test -f systolic_project/runs/${RUN_TAG}/final.odb
+          set -euo pipefail
 
+          echo "Running OpenROAD..."
+
+          openroad \
+            -exit \
+            scripts/flow.tcl \
+            2>&1 | tee \
+            "systolic_project/runs/${RUN_TAG}/openroad_log.txt"
+
+          echo "Checking final database..."
+
+          test -f \
+            "systolic_project/runs/${RUN_TAG}/final.odb"
+
+          echo "OpenROAD completed successfully."
+
+
+      # ============================================================
+      # FEATURE EXTRACTION
+      # ============================================================
       - name: Extract features
         if: success()
+        shell: bash
         run: |
+          set -euo pipefail
+
           python3 scripts/extract_features.py
 
+
+      # ============================================================
+      # UPLOAD RESULTS
+      # ============================================================
       - name: Upload final results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: result-${{ env.RUN_TAG }}
           path: |
-            systolic_project/runs/${{ env.RUN_TAG }}_log.txt
-            systolic_project/runs/${{ env.RUN_TAG }}_features.json
+            systolic_project/runs/${{ env.RUN_TAG }}/
+            systolic_project/synth/systolic_netlist.v
           if-no-files-found: warn
 
+
+      # ============================================================
+      # SUMMARY
+      # ============================================================
       - name: Summary
         if: always()
+        shell: bash
         run: |
-          echo "### Run Summary for ${{ env.RUN_TAG }}" >> $GITHUB_STEP_SUMMARY
-          
+          echo "### Run Summary for ${RUN_TAG}" >> "$GITHUB_STEP_SUMMARY"
+
           if [ -f "systolic_project/synth/systolic_netlist.v" ]; then
-            echo "- Netlist produced: YES" >> $GITHUB_STEP_SUMMARY
+            echo "- Netlist produced: YES" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- Netlist produced: NO" >> $GITHUB_STEP_SUMMARY
+            echo "- Netlist produced: NO" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           if [ -f "systolic_project/runs/${RUN_TAG}/final.odb" ]; then
-            echo "- final.odb produced: YES" >> $GITHUB_STEP_SUMMARY
+            echo "- final.odb produced: YES" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- final.odb produced: NO" >> $GITHUB_STEP_SUMMARY
+            echo "- final.odb produced: NO" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-          if [ -f "systolic_project/runs/${RUN_TAG}_features.json" ]; then
-            echo "- Features JSON produced: YES" >> $GITHUB_STEP_SUMMARY
+          if [ -f "systolic_project/runs/${RUN_TAG}/features.json" ]; then
+            echo "- Features JSON produced: YES" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- Features JSON produced: NO" >> $GITHUB_STEP_SUMMARY
+            echo "- Features JSON produced: NO" >> "$GITHUB_STEP_SUMMARY"
           fi
-  # ====================================================================
-  # JOB 3: Aggregate Results into Dataset CSV
-  # ====================================================================
+
+
+  # ================================================================
+  # JOB 3: Aggregate Results
+  # ================================================================
   aggregate-results:
     needs: run-sweep
     runs-on: ubuntu-latest
     if: always()
+
     steps:
+
       - name: Checkout Code
         uses: actions/checkout@v4
+
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
+
       - name: Install dependencies
-        run: pip install pandas
+        run: |
+          pip install pandas
+
 
       - name: Download all result artifacts
         uses: actions/download-artifact@v4
@@ -193,26 +443,48 @@ jobs:
           path: downloaded_artifacts/
           merge-multiple: true
 
-      - name: Combine JSON features into CSV
+
+      - name: Show downloaded files
+        shell: bash
         run: |
+          echo "Downloaded artifacts:"
+          find downloaded_artifacts -type f -print
+
+
+      - name: Combine JSON features into CSV
+        shell: bash
+        run: |
+          set -euo pipefail
+
           mkdir -p summary_output
-          python3 scripts/aggregate_dataset.py --runs_dir downloaded_artifacts --output_csv summary_output/systolic_array_sweep_dataset.csv
+
+          python3 scripts/aggregate_dataset.py \
+            --runs_dir downloaded_artifacts \
+            --output_csv summary_output/systolic_array_sweep_dataset.csv
+
 
       - name: Upload Aggregated CSV Dataset
         uses: actions/upload-artifact@v4
         with:
           name: full-sweep-dataset-csv
-          path: "**/systolic_array_sweep_dataset.csv"
+          path: summary_output/systolic_array_sweep_dataset.csv
           if-no-files-found: error
 
+
       - name: Summary
+        shell: bash
         run: |
-          echo "### Aggregate Dataset Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### Aggregate Dataset Summary" >> "$GITHUB_STEP_SUMMARY"
+
           CSV_PATH="summary_output/systolic_array_sweep_dataset.csv"
-          
+
           if [ -f "$CSV_PATH" ]; then
             COUNT=$(wc -l < "$CSV_PATH")
-            echo "Successfully generated \`systolic_array_sweep_dataset.csv\` with $((COUNT-1)) run entries." >> $GITHUB_STEP_SUMMARY
+
+            echo "Successfully generated \`systolic_array_sweep_dataset.csv\` with $((COUNT-1)) run entries." \
+              >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "Failed to generate aggregated CSV dataset." >> $GITHUB_STEP_SUMMARY
+            echo "Failed to generate aggregated CSV dataset." \
+              >> "$GITHUB_STEP_SUMMARY"
           fi
+```

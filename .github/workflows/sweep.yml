@@ -724,32 +724,36 @@ jobs:
 
 
       # ================================================================
-      # OPENROAD
-      # ================================================================
+# OPENROAD
+# ================================================================
       - name: Run OpenROAD
         timeout-minutes: 30
         shell: bash
         run: |
-
           set -euo pipefail
+
+          RUN_DIR="systolic_project/runs/${RUN_TAG}"
 
           openroad \
             -exit \
             scripts/flow.tcl \
-            2>&1 | tee \
-            "systolic_project/runs/${RUN_TAG}/openroad_log.txt"
+            2>&1 | tee "${RUN_DIR}/openroad_log.txt"
 
-          test -f \
-            "systolic_project/runs/${RUN_TAG}/final.odb"
+          test -f "${RUN_DIR}/final.odb"
+
 
       - name: Debug generated reports
         shell: bash
         run: |
+          set -euo pipefail
+
+          RUN_DIR="systolic_project/runs/${RUN_TAG}"
+
           echo "========================================"
           echo "RUN DIRECTORY"
           echo "========================================"
 
-          find "systolic_project/runs/${RUN_TAG}" \
+          find "$RUN_DIR" \
             -type f \
             -print | sort
 
@@ -758,7 +762,7 @@ jobs:
           echo "FILE SIZES"
           echo "========================================"
 
-          find "systolic_project/runs/${RUN_TAG}" \
+          find "$RUN_DIR" \
             -type f \
             -printf '%s bytes  %p\n' | sort
 
@@ -767,11 +771,21 @@ jobs:
           echo "OPENROAD LOG - LAST 150 LINES"
           echo "========================================"
 
-          if [ -f "systolic_project/runs/${RUN_TAG}/openroad.log" ]; then
-            tail -150 "systolic_project/runs/${RUN_TAG}/openroad.log"
+          if [ -f "${RUN_DIR}/openroad_log.txt" ]; then
+            tail -150 "${RUN_DIR}/openroad_log.txt"
           else
-            echo "openroad.log NOT FOUND"
+            echo "openroad_log.txt NOT FOUND"
           fi
+
+          echo
+          echo "========================================"
+          echo "REPORT FILES"
+          echo "========================================"
+
+          find "$RUN_DIR" \
+            -type f \
+            \( -name "*.rpt" -o -name "*.report" \) \
+            -print | sort
       # ================================================================
       # FEATURE EXTRACTION
       # ================================================================

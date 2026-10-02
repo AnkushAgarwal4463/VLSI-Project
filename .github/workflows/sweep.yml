@@ -535,12 +535,12 @@ jobs:
             # --------------------------------------------------------------
       # Cache
       # --------------------------------------------------------------
-      - name: Cache Conda Toolchain
+       - name: Cache Conda Toolchain
         id: cache-conda
         uses: actions/cache@v4
         with:
           path: ./conda-env
-          key: ${{ runner.os }}-condapdk-v5-sky130
+          key: ${{ runner.os }}-condapdk-v6-fmt8
 
 
       # --------------------------------------------------------------
@@ -569,7 +569,6 @@ jobs:
         timeout-minutes: 40
         shell: bash
         run: |
-
           set -euo pipefail
 
           curl -Ls \
@@ -584,8 +583,8 @@ jobs:
             --channel main \
             open_pdks.sky130a \
             openroad \
-            yosys
-
+            yosys \
+            fmt=8
 
       - name: Add toolchain to PATH
         shell: bash

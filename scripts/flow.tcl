@@ -92,11 +92,8 @@ set std_cell_lef \
     "${pdk_dir}/libs.ref/sky130_fd_sc_hd/lef/sky130_fd_sc_hd.lef"
 
 if {[info exists ::env(LIB_FILE)] && $::env(LIB_FILE) != ""} {
-
     set lib_file $::env(LIB_FILE)
-
 } else {
-
     set lib_file \
         "${pdk_dir}/libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_5v00.lib"
 }
@@ -109,12 +106,9 @@ set netlist_verilog \
 # ----------------------------------------------------------------------
 
 foreach f [list $tech_lef $std_cell_lef $lib_file $netlist_verilog] {
-
     if {![file exists $f]} {
-
         puts "\[ERROR\] Required file not found:"
         puts "$f"
-
         exit 1
     }
 }
@@ -153,15 +147,10 @@ set util_decimal [expr {$UTIL / 100.0}]
 set total_cell_area 0.0
 
 foreach inst [get_cells -hierarchical *] {
-
     if {![catch {get_property -quiet $inst lib_cell} cell_master]} {
-
         if {$cell_master != ""} {
-
             set area [get_property -quiet $cell_master area]
-
             if {$area != "" && $area > 0} {
-
                 set total_cell_area \
                     [expr {$total_cell_area + $area}]
             }
@@ -169,10 +158,7 @@ foreach inst [get_cells -hierarchical *] {
     }
 }
 
-# Fallback if OpenROAD cannot retrieve the area.
-
 if {$total_cell_area <= 0.0} {
-
     set inst_count \
         [llength [get_cells -hierarchical *]]
 
@@ -193,8 +179,6 @@ set required_core_area \
 set core_dim \
     [expr {sqrt($required_core_area)}]
 
-# SKY130 unithd site height.
-
 set site_height 2.72
 
 set core_dim_snapped \
@@ -205,15 +189,10 @@ if {$core_dim_snapped < 150.0} {
 }
 
 if {$UTIL >= 60} {
-
     set raw_margin 50.0
-
 } elseif {$UTIL >= 40} {
-
     set raw_margin 35.0
-
 } else {
-
     set raw_margin 25.0
 }
 
@@ -260,7 +239,6 @@ set input_ports \
     [get_ports * -filter "direction == input && name != clk"]
 
 if {[llength $input_ports] > 0} {
-
     set_input_delay \
         -clock clk \
         0.2 \
@@ -270,7 +248,6 @@ if {[llength $input_ports] > 0} {
 set output_ports [all_outputs]
 
 if {[llength $output_ports] > 0} {
-
     set_output_delay \
         -clock clk \
         0.2 \
@@ -299,13 +276,10 @@ global_placement \
 puts "\[INFO\] Placing IO pins..."
 
 if {[catch {
-
     place_pins \
         -hor_layers {met3 met5} \
         -ver_layers {met2 met4}
-
 } err]} {
-
     puts "\[WARNING\] Pin placement warning:"
     puts "$err"
 }
@@ -315,58 +289,33 @@ if {[catch {
 # ----------------------------------------------------------------------
 
 detailed_placement
-
 check_placement
 
 # ----------------------------------------------------------------------
-# 13. Placement report
-# ----------------------------------------------------------------------
-
-puts "\[INFO\] Generating placement area report..."
-
-if {[catch {
-
-    report_design_area \
-        > "${run_dir}/placement_area.rpt"
-
-} err]} {
-
-    puts "\[WARNING\] Placement area report failed:"
-    puts "$err"
-}
-
-# ----------------------------------------------------------------------
-# 14. Repair design
+# 13. Repair design
 # ----------------------------------------------------------------------
 
 if {[catch {
-
     repair_design
-
 } err]} {
-
     puts "\[WARNING\] repair_design failed:"
     puts "$err"
 }
 
 if {[catch {
-
     repair_timing \
         -setup \
         -setup_margin 0.2
-
 } err]} {
-
     puts "\[WARNING\] repair_timing failed:"
     puts "$err"
 }
 
 detailed_placement
-
 check_placement
 
 # ----------------------------------------------------------------------
-# 15. Global routing
+# 14. Global routing
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Running global routing..."
@@ -377,89 +326,100 @@ set route_guide \
 set congestion_report \
     "${run_dir}/congestion.rpt"
 
-global_route \
-    -guide_file $route_guide \
-    -congestion_report_file $congestion_report \
-    -congestion_iterations 100
+if {[catch {
+    global_route \
+        -guide_file $route_guide \
+        -congestion_report_file $congestion_report \
+        -congestion_report_iter_step 1 \
+        -congestion_iterations 100
+} err]} {
+    puts "\[ERROR\] Global routing failed:"
+    puts "$err"
+    exit 1
+}
 
 if {![file exists $route_guide]} {
-
     puts "\[ERROR\] route.guide was not generated."
     exit 1
 }
 
-if {![file exists $congestion_report]} {
-
-    puts "\[WARNING\] congestion.rpt was not generated."
-}
-
 # ----------------------------------------------------------------------
-# 16. Global-route wirelength
+# 15. Global-route wirelength
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Measuring global-route wirelength..."
 
 if {[catch {
-
     report_wire_length \
         -global_route \
-        -summary \
+        -verbose \
         -file "${run_dir}/wirelength_global.rpt"
-
 } err]} {
-
     puts "\[WARNING\] Global-route wirelength report failed:"
     puts "$err"
 }
 
 # ----------------------------------------------------------------------
-# 17. Detailed routing
+# 16. Detailed routing
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Running detailed routing..."
 
 if {[catch {
-
     detailed_route
-
 } err]} {
-
     puts "\[ERROR\] Detailed routing failed:"
     puts "$err"
     exit 1
 }
 
 # ----------------------------------------------------------------------
-# 18. Detailed-route wirelength
+# 17. Detailed-route wirelength
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Measuring detailed-route wirelength..."
 
 if {[catch {
-
     report_wire_length \
         -detailed_route \
-        -summary \
+        -verbose \
         -file "${run_dir}/wirelength_detailed.rpt"
-
 } err]} {
-
     puts "\[WARNING\] Detailed-route wirelength report failed:"
     puts "$err"
 }
 
 # ----------------------------------------------------------------------
-# 19. Final wirelength
+# 18. Final DEF
+#
+# This gives Python a technology-independent representation of the
+# final routed design from which wirelength and via count can be
+# independently calculated.
 # ----------------------------------------------------------------------
 
-if {[catch {
+puts "\[INFO\] Writing final DEF..."
 
+if {[catch {
+    write_def \
+        -version 5.8 \
+        "${run_dir}/final.def"
+} err]} {
+    puts "\[WARNING\] write_def failed:"
+    puts "$err"
+}
+
+# ----------------------------------------------------------------------
+# 19. Final wirelength report
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Measuring final wirelength..."
+
+if {[catch {
     report_wire_length \
         -detailed_route \
+        -verbose \
         -file "${run_dir}/wirelength_final.rpt"
-
 } err]} {
-
     puts "\[WARNING\] Final wirelength report failed:"
     puts "$err"
 }
@@ -471,121 +431,84 @@ if {[catch {
 puts "\[INFO\] Generating routing status report..."
 
 if {[catch {
-
     report_route_status \
         > "${run_dir}/route_status_final.rpt"
-
 } err]} {
-
-    puts "\[WARNING\] Route status report failed:"
+    puts "\[WARNING\] Routing status report failed:"
     puts "$err"
 }
 
 # ----------------------------------------------------------------------
-# 21. FINAL DESIGN AREA
-# ----------------------------------------------------------------------
-
-puts "\[INFO\] Generating final design area report..."
-
-if {[catch {
-
-    report_design_area \
-        > "${run_dir}/design_area.rpt"
-
-} err]} {
-
-    puts "\[WARNING\] Final design area report failed:"
-    puts "$err"
-}
-
-# ----------------------------------------------------------------------
-# 22. CELL USAGE
-# ----------------------------------------------------------------------
-
-puts "\[INFO\] Generating cell usage report..."
-
-if {[catch {
-
-    report_cell_usage \
-        -verbose \
-        -file "${run_dir}/cell_usage.rpt"
-
-} err]} {
-
-    puts "\[WARNING\] Cell usage report failed:"
-    puts "$err"
-}
-
-# ----------------------------------------------------------------------
-# 23. SETUP TIMING
+# 21. Setup timing
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Generating setup timing report..."
 
 if {[catch {
-
     report_checks \
         -path_delay max \
         -format full_clock_expanded \
         > "${run_dir}/timing_setup.rpt"
-
 } err]} {
-
     puts "\[WARNING\] Setup timing report failed:"
     puts "$err"
 }
 
 # ----------------------------------------------------------------------
-# 24. HOLD TIMING
+# 22. Hold timing
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Generating hold timing report..."
 
 if {[catch {
-
     report_checks \
         -path_delay min \
         -format full_clock_expanded \
         > "${run_dir}/timing_hold.rpt"
-
 } err]} {
-
     puts "\[WARNING\] Hold timing report failed:"
     puts "$err"
 }
 
 # ----------------------------------------------------------------------
-# 25. Explicit WNS/TNS reports
+# 23. Setup WNS / TNS
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Generating setup WNS/TNS..."
 
 if {[catch {
+    report_wns \
+        > "${run_dir}/wns_setup.rpt"
 
-    report_wns > "${run_dir}/wns_setup.rpt"
-    report_tns > "${run_dir}/tns_setup.rpt"
-
+    report_tns \
+        > "${run_dir}/tns_setup.rpt"
 } err]} {
-
-    puts "\[WARNING\] Setup WNS/TNS report failed:"
-    puts "$err"
-}
-
-puts "\[INFO\] Generating hold WNS/TNS..."
-
-if {[catch {
-
-    report_wns -min > "${run_dir}/wns_hold.rpt"
-    report_tns -min > "${run_dir}/tns_hold.rpt"
-
-} err]} {
-
-    puts "\[WARNING\] Hold WNS/TNS report failed:"
+    puts "\[WARNING\] Setup WNS/TNS failed:"
     puts "$err"
 }
 
 # ----------------------------------------------------------------------
-# 26. Final database
+# 24. Hold WNS / TNS
+#
+# These files are retained, but Python will calculate hold WNS
+# directly from timing_hold.rpt if these reports are empty.
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Generating hold WNS/TNS..."
+
+if {[catch {
+    report_wns -min \
+        > "${run_dir}/wns_hold.rpt"
+
+    report_tns -min \
+        > "${run_dir}/tns_hold.rpt"
+} err]} {
+    puts "\[WARNING\] Hold WNS/TNS failed:"
+    puts "$err"
+}
+
+# ----------------------------------------------------------------------
+# 25. Final design database
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Saving final database..."
@@ -594,30 +517,28 @@ write_db \
     "${run_dir}/final.odb"
 
 if {![file exists "${run_dir}/final.odb"]} {
-
     puts "\[ERROR\] final.odb was not created."
     exit 1
 }
 
 # ----------------------------------------------------------------------
-# 27. Verify generated files
+# 26. Final verification
 # ----------------------------------------------------------------------
 
 puts ""
 puts "=============================================="
-puts "VERIFYING GENERATED REPORTS"
+puts "VERIFYING GENERATED FILES"
 puts "=============================================="
 
 foreach f [list \
     "${run_dir}/final.odb" \
+    "${run_dir}/final.def" \
     "${run_dir}/route.guide" \
     "${run_dir}/congestion.rpt" \
     "${run_dir}/wirelength_global.rpt" \
     "${run_dir}/wirelength_detailed.rpt" \
     "${run_dir}/wirelength_final.rpt" \
     "${run_dir}/route_status_final.rpt" \
-    "${run_dir}/design_area.rpt" \
-    "${run_dir}/cell_usage.rpt" \
     "${run_dir}/timing_setup.rpt" \
     "${run_dir}/timing_hold.rpt" \
     "${run_dir}/wns_setup.rpt" \
@@ -626,17 +547,16 @@ foreach f [list \
     "${run_dir}/tns_hold.rpt"] {
 
     if {[file exists $f]} {
+        set size [file size $f]
 
-        puts "\[OK\] $f"
-
+        puts "\[OK\] $f ($size bytes)"
     } else {
-
         puts "\[WARNING\] Missing: $f"
     }
 }
 
 # ----------------------------------------------------------------------
-# 28. Final summary
+# 27. Final summary
 # ----------------------------------------------------------------------
 
 puts ""
@@ -647,15 +567,13 @@ puts "Run tag: $RUN_TAG"
 puts ""
 puts "Generated:"
 puts "  final.odb"
+puts "  final.def"
 puts "  route.guide"
 puts "  congestion.rpt"
 puts "  wirelength_global.rpt"
 puts "  wirelength_detailed.rpt"
 puts "  wirelength_final.rpt"
 puts "  route_status_final.rpt"
-puts "  placement_area.rpt"
-puts "  design_area.rpt"
-puts "  cell_usage.rpt"
 puts "  timing_setup.rpt"
 puts "  timing_hold.rpt"
 puts "  wns_setup.rpt"

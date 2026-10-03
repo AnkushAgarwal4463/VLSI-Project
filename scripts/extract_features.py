@@ -42,6 +42,7 @@ def safe_float(value):
 def read_text(path):
     if not path.exists():
         return ""
+
     try:
         return path.read_text(errors="ignore")
     except Exception:
@@ -160,7 +161,10 @@ def parse_def(def_file):
 
         # SKY130 sequential cells commonly contain:
         # dfrtp, dfrbp, dfxtp, dlrtp, etc.
-        if re.search(r"(dff|dfr|dfb|dfx|dlr|latch)", master):
+        if re.search(
+            r"(dff|dfr|dfb|dfx|dlr|latch)",
+            master
+        ):
             result["num_registers"] += 1
 
         if "buf" in master:
@@ -255,7 +259,10 @@ def calculate_component_features(def_data):
     nx = 10
     ny = 10
 
-    grid = [[0 for _ in range(nx)] for _ in range(ny)]
+    grid = [
+        [0 for _ in range(nx)]
+        for _ in range(ny)
+    ]
 
     xrange = max(xmax - xmin, 1)
     yrange = max(ymax - ymin, 1)
@@ -280,37 +287,34 @@ def calculate_component_features(def_data):
     densities = []
 
     for row in grid:
+
         for count in row:
+
             density = (
-                count / total_cells * 100.0 * nx * ny
+                count / total_cells
+                * 100.0
+                * nx
+                * ny
             )
+
             densities.append(density)
 
-    mean_density = sum(densities) / len(densities)
+    mean_density = (
+        sum(densities) /
+        len(densities)
+    )
 
-    variance = sum(
-        (d - mean_density) ** 2
-        for d in densities
-    ) / len(densities)
+    variance = (
+        sum(
+            (d - mean_density) ** 2
+            for d in densities
+        )
+        / len(densities)
+    )
 
     std_density = math.sqrt(variance)
 
     max_density = max(densities)
-
-    # ------------------------------------------------------------
-    # Pin density
-    # ------------------------------------------------------------
-
-    pin_density = None
-
-    if total_cells > 0:
-        # Estimate from number of pins / placement area.
-        #
-        # This is kept as a feature derived from the actual design
-        # rather than a fixed value.
-        #
-        # num_pins is handled later from DEF.
-        pass
 
     return {
         "x_spread": round(x_spread, 6),
@@ -318,7 +322,7 @@ def calculate_component_features(def_data):
         "max_density": round(max_density, 6),
         "mean_density": round(mean_density, 6),
         "std_density": round(std_density, 6),
-        "pin_density": pin_density,
+        "pin_density": None,
     }
 
 
@@ -338,17 +342,58 @@ def calculate_fanout_features(def_data):
 
     fanouts = []
 
-    for body in nets.values():
+    for net_name, body in nets.items():
 
-        # Every occurrence of a connection:
-        # ( inst pin )
+        # --------------------------------------------------------
+        # Exclude obvious power / ground nets.
+        # --------------------------------------------------------
+
+        name_upper = net_name.upper()
+
+        power_ground_names = {
+            "VDD",
+            "VSS",
+            "VPWR",
+            "VGND",
+            "VCCD",
+            "VSSD",
+            "VCCA",
+            "VSSA",
+        }
+
+        if (
+            name_upper in power_ground_names
+            or name_upper.startswith("VDD")
+            or name_upper.startswith("VSS")
+            or name_upper.startswith("VPWR")
+            or name_upper.startswith("VGND")
+            or name_upper.startswith("VCCD")
+            or name_upper.startswith("VSSD")
+            or name_upper.startswith("VCCA")
+            or name_upper.startswith("VSSA")
+        ):
+            continue
+
+        # --------------------------------------------------------
+        # Every occurrence of:
+        #
+        #     ( inst pin )
+        #
+        # represents a DEF net connection.
+        # --------------------------------------------------------
+
         connections = re.findall(
             r"\(\s+\S+\s+\S+\s*\)",
             body
         )
 
         if connections:
-            fanout = max(len(connections) - 1, 0)
+
+            fanout = max(
+                len(connections) - 1,
+                0
+            )
+
             fanouts.append(fanout)
 
     if not fanouts:
@@ -362,7 +407,9 @@ def calculate_fanout_features(def_data):
             sum(fanouts) / len(fanouts),
             6
         ),
-        "max_fanout": float(max(fanouts)),
+        "max_fanout": float(
+            max(fanouts)
+        ),
     }
 
 
@@ -400,7 +447,8 @@ def calculate_routing_from_def(def_file):
         net_text = nets_section.group(1)
 
         net_blocks = re.findall(
-            r"(?ms)^\s*-\s+\S+.*?(?=^\s*-\s+\S+|\Z)",
+            r"(?ms)^\s*-\s+\S+.*?"
+            r"(?=^\s*-\s+\S+|\Z)",
             net_text
         )
 
@@ -411,17 +459,11 @@ def calculate_routing_from_def(def_file):
 
     # ------------------------------------------------------------
     # Routed geometry
-    #
-    # Supports:
-    #
-    #   ( x y ) ( x y )
-    #   NEW met1 ...
-    #   ROUTED met1 ...
-    #
     # ------------------------------------------------------------
 
     routed_sections = re.findall(
-        r"(?is)(?:ROUTED|FIXED).*?(?=^\s*-\s+\S+|\Z)",
+        r"(?is)(?:ROUTED|FIXED).*?"
+        r"(?=^\s*-\s+\S+|\Z)",
         text
     )
 
@@ -433,7 +475,8 @@ def calculate_routing_from_def(def_file):
 
         coords = [
             (int(x), int(y))
-            for x, y in coordinate_pattern.findall(section)
+            for x, y
+            in coordinate_pattern.findall(section)
         ]
 
         if len(coords) < 2:
@@ -456,7 +499,9 @@ def calculate_routing_from_def(def_file):
             )
         )
 
-    wirelength_um = wirelength_dbu / 1000.0
+    wirelength_um = (
+        wirelength_dbu / 1000.0
+    )
 
     return {
         "wirelength_um": (
@@ -499,14 +544,28 @@ def calculate_estimated_wirelength(def_data):
         for ref in refs:
 
             if ref in components:
+
                 c = components[ref]
-                points.append((c["x"], c["y"]))
+
+                points.append(
+                    (
+                        c["x"],
+                        c["y"]
+                    )
+                )
 
         if len(points) < 2:
             continue
 
-        xs = [p[0] for p in points]
-        ys = [p[1] for p in points]
+        xs = [
+            p[0]
+            for p in points
+        ]
+
+        ys = [
+            p[1]
+            for p in points
+        ]
 
         total += (
             max(xs) - min(xs)
@@ -516,7 +575,10 @@ def calculate_estimated_wirelength(def_data):
             max(ys) - min(ys)
         )
 
-    return round(total / 1000.0, 6)
+    return round(
+        total / 1000.0,
+        6
+    )
 
 
 # ================================================================
@@ -528,14 +590,12 @@ def extract_congestion():
     text = read_text(CONGESTION)
 
     if not text.strip():
-        print("[WARNING] congestion.rpt is missing or empty.")
+
+        print(
+            "[WARNING] congestion.rpt is missing or empty."
+        )
+
         return None
-
-    # ------------------------------------------------------------
-    # Normalize text
-    # ------------------------------------------------------------
-
-    text_lower = text.lower()
 
     # ------------------------------------------------------------
     # Explicit congestion / overflow summary patterns
@@ -543,32 +603,32 @@ def extract_congestion():
 
     patterns = [
 
-        # congestion = 12.34
-        r"\bcongestion\b\s*[:=]\s*([-+]?\d+(?:\.\d+)?)",
+        r"\bcongestion\b\s*[:=]\s*"
+        r"([-+]?\d+(?:\.\d+)?)",
 
-        # congestion 12.34
-        r"\bcongestion\b\s+([-+]?\d+(?:\.\d+)?)",
+        r"\bcongestion\b\s+"
+        r"([-+]?\d+(?:\.\d+)?)",
 
-        # total overflow = 12.34
-        r"\btotal\s+overflow\b\s*[:=]\s*([-+]?\d+(?:\.\d+)?)",
+        r"\btotal\s+overflow\b\s*[:=]\s*"
+        r"([-+]?\d+(?:\.\d+)?)",
 
-        # overflow = 12.34
-        r"\boverflow\b\s*[:=]\s*([-+]?\d+(?:\.\d+)?)",
+        r"\boverflow\b\s*[:=]\s*"
+        r"([-+]?\d+(?:\.\d+)?)",
 
-        # overflow 12.34
-        r"\boverflow\b\s+([-+]?\d+(?:\.\d+)?)",
+        r"\boverflow\b\s+"
+        r"([-+]?\d+(?:\.\d+)?)",
 
-        # overflow: -123 / +123
-        r"\boverflow\b[^\n]*?([-+]?\d+(?:\.\d+)?)",
+        r"\boverflow\b[^\n]*?"
+        r"([-+]?\d+(?:\.\d+)?)",
 
-        # global overflow style summaries
-        r"\bglobal\s+overflow\b[^\n]*?([-+]?\d+(?:\.\d+)?)",
+        r"\bglobal\s+overflow\b[^\n]*?"
+        r"([-+]?\d+(?:\.\d+)?)",
 
-        # max congestion
-        r"\bmax(?:imum)?\s+congestion\b[^\n]*?([-+]?\d+(?:\.\d+)?)",
+        r"\bmax(?:imum)?\s+congestion\b[^\n]*?"
+        r"([-+]?\d+(?:\.\d+)?)",
 
-        # peak congestion
-        r"\bpeak\s+congestion\b[^\n]*?([-+]?\d+(?:\.\d+)?)",
+        r"\bpeak\s+congestion\b[^\n]*?"
+        r"([-+]?\d+(?:\.\d+)?)",
     ]
 
     candidates = []
@@ -584,6 +644,7 @@ def extract_congestion():
         for value in matches:
 
             try:
+
                 value = float(value)
 
                 if math.isfinite(value):
@@ -594,20 +655,20 @@ def extract_congestion():
 
     if candidates:
 
-        # Use the maximum explicit congestion/overflow value.
         value = max(candidates)
 
         print(
-            f"[INFO] Congestion extracted from report: {value}"
+            f"[INFO] Congestion extracted from report: "
+            f"{value}"
         )
 
-        return round(value, 6)
+        return round(
+            value,
+            6
+        )
 
     # ------------------------------------------------------------
     # OpenROAD-style congestion tables
-    #
-    # Look specifically for lines containing congestion/overflow
-    # terminology rather than taking arbitrary numbers.
     # ------------------------------------------------------------
 
     for line in text.splitlines():
@@ -633,6 +694,7 @@ def extract_congestion():
         for number in numbers:
 
             try:
+
                 value = float(number)
 
                 if math.isfinite(value):
@@ -646,14 +708,98 @@ def extract_congestion():
             value = max(values)
 
             print(
-                f"[INFO] Congestion extracted from summary line: {value}"
+                "[INFO] Congestion extracted from "
+                f"summary line: {value}"
             )
 
-            return round(value, 6)
+            return round(
+                value,
+                6
+            )
 
     print(
-        "[WARNING] Could not identify a congestion value "
-        "in congestion.rpt."
+        "[WARNING] Could not identify a congestion "
+        "value in congestion.rpt."
+    )
+
+    return None
+
+
+# ================================================================
+# TIMING SCALAR REPORT
+# ================================================================
+
+def extract_scalar_report(path, metric_name):
+
+    """
+    Extract a scalar metric from a simple report such as:
+
+        wns -21.28
+        tns -2649.80
+
+    Returns None if the file does not exist or
+    the metric cannot be parsed.
+    """
+
+    if not path.exists():
+
+        print(
+            f"[WARN] {path.name} not found."
+        )
+
+        return None
+
+    try:
+
+        text = path.read_text(
+            errors="ignore"
+        ).strip()
+
+    except Exception as e:
+
+        print(
+            f"[WARN] Could not read {path}: {e}"
+        )
+
+        return None
+
+    if not text:
+
+        print(
+            f"[WARN] {path.name} is empty."
+        )
+
+        return None
+
+    pattern = (
+        rf"\b{re.escape(metric_name)}\b"
+        rf"\s*[:=]?\s*"
+        rf"(-?\d+(?:\.\d+)?"
+        rf"(?:[eE][+-]?\d+)?)"
+    )
+
+    match = re.search(
+        pattern,
+        text,
+        re.IGNORECASE
+    )
+
+    if match:
+
+        value = float(
+            match.group(1)
+        )
+
+        print(
+            f"[INFO] {metric_name.upper()} "
+            f"extracted from {path.name}: {value}"
+        )
+
+        return value
+
+    print(
+        f"[WARN] Could not find "
+        f"{metric_name} in {path.name}"
     )
 
     return None
@@ -665,7 +811,9 @@ def extract_congestion():
 
 def parse_timing_report():
 
-    text = read_text(TIMING_SETUP)
+    text = read_text(
+        TIMING_SETUP
+    )
 
     result = {
         "WNS": None,
@@ -675,7 +823,11 @@ def parse_timing_report():
     }
 
     if not text.strip():
-        print("[WARNING] timing_setup.rpt is empty.")
+
+        print(
+            "[WARNING] timing_setup.rpt is empty."
+        )
+
         return result
 
     # ------------------------------------------------------------
@@ -694,9 +846,11 @@ def parse_timing_report():
     for match in slack_pattern.finditer(text):
 
         try:
+
             slack_values.append(
                 float(match.group(1))
             )
+
         except Exception:
             pass
 
@@ -724,9 +878,11 @@ def parse_timing_report():
             ):
 
                 try:
+
                     slack_values.append(
                         float(value)
                     )
+
                 except Exception:
                     pass
 
@@ -752,31 +908,26 @@ def parse_timing_report():
     # ------------------------------------------------------------
     # TNS
     #
-    # First look for an explicit TNS / total negative slack
-    # summary.
+    # This remains as a fallback only.
+    # The authoritative tns_setup.rpt is read in main().
     # ------------------------------------------------------------
 
     explicit_tns_patterns = [
 
-        # TNS: -123.45
         r"\bTNS\b\s*[:=]\s*"
         r"([-+]?\d+(?:\.\d+)?)",
 
-        # TNS -123.45
         r"\bTNS\b\s+"
         r"([-+]?\d+(?:\.\d+)?)",
 
-        # Total Negative Slack: -123.45
         r"\btotal\s+negative\s+slack\b"
         r"\s*[:=]\s*"
         r"([-+]?\d+(?:\.\d+)?)",
 
-        # Total Negative Slack -123.45
         r"\btotal\s+negative\s+slack\b"
         r"[^\n]*?"
         r"([-+]?\d+(?:\.\d+)?)",
 
-        # negative slack: -123.45
         r"\bnegative\s+slack\b"
         r"\s*[:=]\s*"
         r"([-+]?\d+(?:\.\d+)?)",
@@ -800,7 +951,9 @@ def parse_timing_report():
                     match.group(1)
                 )
 
-                if math.isfinite(explicit_tns):
+                if math.isfinite(
+                    explicit_tns
+                ):
                     break
 
             except Exception:
@@ -814,20 +967,9 @@ def parse_timing_report():
         )
 
         print(
-            f"[INFO] Setup TNS extracted explicitly: "
-            f"{result['TNS']}"
+            f"[INFO] Setup TNS extracted "
+            f"explicitly: {result['TNS']}"
         )
-
-    # ------------------------------------------------------------
-    # TNS fallback
-    #
-    # If the report does not contain a TNS summary, calculate TNS
-    # from ALL reported negative setup slacks.
-    #
-    # IMPORTANT:
-    # This is only a fallback because a report containing only
-    # selected paths can underestimate true design-level TNS.
-    # ------------------------------------------------------------
 
     elif slack_values:
 
@@ -849,7 +991,8 @@ def parse_timing_report():
             result["TNS"] = 0.0
 
         print(
-            f"[INFO] Setup TNS derived from reported slacks: "
+            f"[INFO] Setup TNS derived "
+            f"from reported slacks: "
             f"{result['TNS']}"
         )
 
@@ -875,14 +1018,21 @@ def parse_timing_report():
         ):
             continue
 
-        matches = slack_pattern.findall(block)
+        matches = slack_pattern.findall(
+            block
+        )
 
         if not matches:
             continue
 
         try:
-            slack = float(matches[-1])
+
+            slack = float(
+                matches[-1]
+            )
+
         except Exception:
+
             continue
 
         if (
@@ -894,10 +1044,14 @@ def parse_timing_report():
             worst_block = block
 
     # ------------------------------------------------------------
-    # If no Startpoint blocks were found, use whole report
+    # If no Startpoint blocks were found,
+    # use whole report.
     # ------------------------------------------------------------
 
-    if worst_block is None and slack_values:
+    if (
+        worst_block is None
+        and slack_values
+    ):
 
         worst_block = text
 
@@ -1031,9 +1185,12 @@ def parse_timing_report():
 
 def parse_hold_timing():
 
-    text = read_text(TIMING_HOLD)
+    text = read_text(
+        TIMING_HOLD
+    )
 
     if not text:
+
         return {
             "hold_WNS": None,
             "hold_TNS": None,
@@ -1042,38 +1199,52 @@ def parse_hold_timing():
     slack_values = []
 
     for value in re.findall(
-        r"([-+]?\d+(?:\.\d+)?)\s+slack\s+\((?:VIOLATED|MET)\)",
+        r"([-+]?\d+(?:\.\d+)?)"
+        r"\s+slack\s+"
+        r"\((?:VIOLATED|MET)\)",
         text,
         re.I
     ):
 
         try:
-            slack_values.append(float(value))
+
+            slack_values.append(
+                float(value)
+            )
+
         except Exception:
             pass
 
     if not slack_values:
+
         return {
             "hold_WNS": None,
             "hold_TNS": None,
         }
 
-    wns = min(slack_values)
-
-    # ------------------------------------------------------------
-    # Sum only negative slacks for TNS.
-    # ------------------------------------------------------------
+    wns = min(
+        slack_values
+    )
 
     negative = [
-        v for v in slack_values
+        v
+        for v in slack_values
         if v < 0
     ]
 
-    tns = sum(negative)
+    tns = sum(
+        negative
+    )
 
     return {
-        "hold_WNS": round(wns, 6),
-        "hold_TNS": round(tns, 6),
+        "hold_WNS": round(
+            wns,
+            6
+        ),
+        "hold_TNS": round(
+            tns,
+            6
+        ),
     }
 
 
@@ -1087,8 +1258,13 @@ def main():
     print("FEATURE EXTRACTION")
     print("=" * 70)
 
-    print(f"Run tag : {RUN_TAG}")
-    print(f"Run dir : {RUN_DIR}")
+    print(
+        f"Run tag : {RUN_TAG}"
+    )
+
+    print(
+        f"Run dir : {RUN_DIR}"
+    )
 
     RUN_DIR.mkdir(
         parents=True,
@@ -1100,15 +1276,28 @@ def main():
     # ------------------------------------------------------------
 
     if not FINAL_DEF.exists():
-        print("[ERROR] final.def not found.")
+
+        print(
+            "[ERROR] final.def not found."
+        )
+
         raise SystemExit(1)
 
     if not TIMING_SETUP.exists():
-        print("[ERROR] timing_setup.rpt not found.")
+
+        print(
+            "[ERROR] timing_setup.rpt not found."
+        )
+
         raise SystemExit(1)
 
-    print("[INFO] final.def exists.")
-    print("[INFO] timing_setup.rpt exists.")
+    print(
+        "[INFO] final.def exists."
+    )
+
+    print(
+        "[INFO] timing_setup.rpt exists."
+    )
 
     # ------------------------------------------------------------
     # Environment
@@ -1120,7 +1309,9 @@ def main():
     # DEF
     # ------------------------------------------------------------
 
-    def_data = parse_def(FINAL_DEF)
+    def_data = parse_def(
+        FINAL_DEF
+    )
 
     # ------------------------------------------------------------
     # Placement features
@@ -1162,78 +1353,58 @@ def main():
 
     congestion = extract_congestion()
 
-   # ------------------------------------------------------------
-# Timing
-# ------------------------------------------------------------
+    # ------------------------------------------------------------
+    # Timing
+    # ------------------------------------------------------------
 
-def extract_scalar_report(path, metric_name):
-    """
-    Extract a scalar metric from a simple report such as:
+    timing = parse_timing_report()
 
-        wns -21.28
-        tns -2649.80
+    # ------------------------------------------------------------
+    # AUTHORITATIVE SETUP WNS / TNS
+    # ------------------------------------------------------------
+    #
+    # timing_setup.rpt is used for:
+    #   - logic depth
+    #   - critical path wirelength
+    #
+    # Dedicated summary files are authoritative for:
+    #   - WNS
+    #   - TNS
+    #
+    # This means every run gets its own WNS/TNS values.
+    # Nothing is hardcoded.
+    # ------------------------------------------------------------
 
-    Returns None if the file does not exist or the metric cannot be parsed.
-    """
-    if not path.exists():
-        print(f"[WARN] {path.name} not found.")
-        return None
+    setup_wns = extract_scalar_report(
+        WNS_SETUP,
+        "wns"
+    )
 
-    try:
-        text = path.read_text(errors="ignore").strip()
-    except Exception as e:
-        print(f"[WARN] Could not read {path}: {e}")
-        return None
+    setup_tns = extract_scalar_report(
+        TNS_SETUP,
+        "tns"
+    )
 
-    if not text:
-        print(f"[WARN] {path.name} is empty.")
-        return None
+    if setup_wns is not None:
 
-    pattern = rf"\b{re.escape(metric_name)}\b\s*[:=]?\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)"
+        timing["WNS"] = round(
+            setup_wns,
+            6
+        )
 
-    match = re.search(pattern, text, re.IGNORECASE)
+    if setup_tns is not None:
 
-    if match:
-        value = float(match.group(1))
-        print(f"[INFO] {metric_name.upper()} extracted from {path.name}: {value}")
-        return value
+        timing["TNS"] = round(
+            setup_tns,
+            6
+        )
 
-    print(f"[WARN] Could not find {metric_name} in {path.name}")
-    return None
+    # ------------------------------------------------------------
+    # Hold timing
+    # ------------------------------------------------------------
 
+    hold = parse_hold_timing()
 
-# ------------------------------------------------------------
-# Parse timing reports
-# ------------------------------------------------------------
-
-timing = parse_timing_report()
-
-# ------------------------------------------------------------
-# AUTHORITATIVE SETUP WNS / TNS
-# ------------------------------------------------------------
-# timing_setup.rpt is used for:
-#   - logic depth
-#   - critical path wirelength
-#
-# Dedicated summary files are authoritative for:
-#   - WNS
-#   - TNS
-
-setup_wns = extract_scalar_report(WNS_SETUP, "wns")
-setup_tns = extract_scalar_report(TNS_SETUP, "tns")
-
-if setup_wns is not None:
-    timing["WNS"] = round(setup_wns, 6)
-
-if setup_tns is not None:
-    timing["TNS"] = round(setup_tns, 6)
-
-
-# ------------------------------------------------------------
-# Hold timing
-# ------------------------------------------------------------
-
-hold = parse_hold_timing()
     # ------------------------------------------------------------
     # Pin density
     # ------------------------------------------------------------
@@ -1247,9 +1418,9 @@ hold = parse_hold_timing()
     ):
 
         pin_density = round(
-            def_data["num_pins"] /
-            def_data["die_area_um2"] *
-            1e4,
+            def_data["num_pins"]
+            / def_data["die_area_um2"]
+            * 1e4,
             6
         )
 
@@ -1366,7 +1537,6 @@ hold = parse_hold_timing()
 
         "num_buffers":
             def_data["num_buffers"],
-
     }
 
     # ------------------------------------------------------------
@@ -1374,15 +1544,18 @@ hold = parse_hold_timing()
     # ------------------------------------------------------------
 
     wirelength_available = (
-        features["wirelength_um"] is not None
+        features["wirelength_um"]
+        is not None
     )
 
     via_count_available = (
-        features["via_count"] is not None
+        features["via_count"]
+        is not None
     )
 
     congestion_available = (
-        features["congestion"] is not None
+        features["congestion"]
+        is not None
     )
 
     timing_available = (
@@ -1395,6 +1568,7 @@ hold = parse_hold_timing()
     # ------------------------------------------------------------
 
     required_features = [
+
         "max_density",
         "mean_density",
         "std_density",
@@ -1418,9 +1592,11 @@ hold = parse_hold_timing()
     ]
 
     missing_required = [
+
         name
         for name in required_features
         if features.get(name) is None
+
     ]
 
     valid_run = (
@@ -1447,7 +1623,9 @@ hold = parse_hold_timing()
         timing_available
     )
 
-    features["valid_run"] = valid_run
+    features["valid_run"] = (
+        valid_run
+    )
 
     features["missing_required_features"] = (
         missing_required
@@ -1477,10 +1655,14 @@ hold = parse_hold_timing()
     print("FEATURE EXTRACTION COMPLETE")
     print("=" * 70)
 
-    print(f"Output: {OUTPUT_FILE}")
+    print(
+        f"Output: {OUTPUT_FILE}"
+    )
+
     print()
 
     for key, value in features.items():
+
         print(
             f"{key:<30}: {value}"
         )
@@ -1491,20 +1673,31 @@ hold = parse_hold_timing()
 
         print("=" * 70)
         print("[SUCCESS] VALID RUN")
-        print("All required features are available.")
+        print(
+            "All required features are available."
+        )
         print("=" * 70)
 
     else:
 
         print("=" * 70)
         print("[WARNING] INVALID RUN")
-        print("Missing required features:")
+        print(
+            "Missing required features:"
+        )
 
         for feature in missing_required:
-            print(f"  - {feature}")
+
+            print(
+                f"  - {feature}"
+            )
 
         print("=" * 70)
 
+
+# ================================================================
+# ENTRY POINT
+# ================================================================
 
 if __name__ == "__main__":
     main()

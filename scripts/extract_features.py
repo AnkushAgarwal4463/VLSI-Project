@@ -411,7 +411,6 @@ def extract_def_routing_metrics():
 
     text = read_text(DEF)
 
-    if not text:
         return {
             "wirelength_um": None,
             "via_count": None,
@@ -811,7 +810,7 @@ def main():
 
             features["wirelength_available"] = True
 
-    features["via_count"] = \
+    features["via_count"] = None
         def_metrics["via_count"]
 
     # ------------------------------------------------------------

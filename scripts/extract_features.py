@@ -20,6 +20,11 @@ OUTPUT_FILE = RUN_DIR / "features.json"
 FINAL_DEF = RUN_DIR / "final.def"
 TIMING_SETUP = RUN_DIR / "timing_setup.rpt"
 TIMING_HOLD = RUN_DIR / "timing_hold.rpt"
+
+# Official setup timing summary files
+WNS_SETUP = RUN_DIR / "wns_setup.rpt"
+TNS_SETUP = RUN_DIR / "tns_setup.rpt"
+
 CONGESTION = RUN_DIR / "congestion.rpt"
 
 
@@ -523,64 +528,133 @@ def extract_congestion():
     text = read_text(CONGESTION)
 
     if not text.strip():
+        print("[WARNING] congestion.rpt is missing or empty.")
         return None
 
-    values = []
+    # ------------------------------------------------------------
+    # Normalize text
+    # ------------------------------------------------------------
 
-    # Search for numerical congestion/overflow values.
+    text_lower = text.lower()
+
+    # ------------------------------------------------------------
+    # Explicit congestion / overflow summary patterns
+    # ------------------------------------------------------------
+
     patterns = [
-        r"overflow\s*[:=]\s*([-+]?\d+(?:\.\d+)?)",
-        r"congestion\s*[:=]\s*([-+]?\d+(?:\.\d+)?)",
-        r"total\s+overflow\s*[:=]\s*([-+]?\d+(?:\.\d+)?)",
+
+        # congestion = 12.34
+        r"\bcongestion\b\s*[:=]\s*([-+]?\d+(?:\.\d+)?)",
+
+        # congestion 12.34
+        r"\bcongestion\b\s+([-+]?\d+(?:\.\d+)?)",
+
+        # total overflow = 12.34
+        r"\btotal\s+overflow\b\s*[:=]\s*([-+]?\d+(?:\.\d+)?)",
+
+        # overflow = 12.34
+        r"\boverflow\b\s*[:=]\s*([-+]?\d+(?:\.\d+)?)",
+
+        # overflow 12.34
+        r"\boverflow\b\s+([-+]?\d+(?:\.\d+)?)",
+
+        # overflow: -123 / +123
+        r"\boverflow\b[^\n]*?([-+]?\d+(?:\.\d+)?)",
+
+        # global overflow style summaries
+        r"\bglobal\s+overflow\b[^\n]*?([-+]?\d+(?:\.\d+)?)",
+
+        # max congestion
+        r"\bmax(?:imum)?\s+congestion\b[^\n]*?([-+]?\d+(?:\.\d+)?)",
+
+        # peak congestion
+        r"\bpeak\s+congestion\b[^\n]*?([-+]?\d+(?:\.\d+)?)",
     ]
+
+    candidates = []
 
     for pattern in patterns:
 
-        for value in re.findall(
+        matches = re.findall(
             pattern,
             text,
             re.I
-        ):
+        )
+
+        for value in matches:
+
             try:
-                values.append(float(value))
+                value = float(value)
+
+                if math.isfinite(value):
+                    candidates.append(value)
+
             except Exception:
-                pass
+                continue
 
-    if values:
-        return round(max(values), 6)
+    if candidates:
+
+        # Use the maximum explicit congestion/overflow value.
+        value = max(candidates)
+
+        print(
+            f"[INFO] Congestion extracted from report: {value}"
+        )
+
+        return round(value, 6)
 
     # ------------------------------------------------------------
-    # Fallback:
+    # OpenROAD-style congestion tables
     #
-    # If the congestion report contains a numeric grid,
-    # calculate the maximum numeric congestion value.
+    # Look specifically for lines containing congestion/overflow
+    # terminology rather than taking arbitrary numbers.
     # ------------------------------------------------------------
-
-    numeric_values = []
 
     for line in text.splitlines():
 
-        if not line.strip():
+        line_lower = line.lower()
+
+        if (
+            "overflow" not in line_lower
+            and "congestion" not in line_lower
+        ):
             continue
 
-        nums = re.findall(
+        numbers = re.findall(
             r"[-+]?\d+(?:\.\d+)?",
             line
         )
 
-        for n in nums:
+        if not numbers:
+            continue
+
+        values = []
+
+        for number in numbers:
 
             try:
-                v = float(n)
+                value = float(number)
 
-                if v >= 0:
-                    numeric_values.append(v)
+                if math.isfinite(value):
+                    values.append(value)
 
             except Exception:
                 pass
 
-    if numeric_values:
-        return round(max(numeric_values), 6)
+        if values:
+
+            value = max(values)
+
+            print(
+                f"[INFO] Congestion extracted from summary line: {value}"
+            )
+
+            return round(value, 6)
+
+    print(
+        "[WARNING] Could not identify a congestion value "
+        "in congestion.rpt."
+    )
 
     return None
 
@@ -600,7 +674,8 @@ def parse_timing_report():
         "crit_path_wirelength": None,
     }
 
-    if not text:
+    if not text.strip():
+        print("[WARNING] timing_setup.rpt is empty.")
         return result
 
     # ------------------------------------------------------------
@@ -609,54 +684,183 @@ def parse_timing_report():
 
     slack_values = []
 
-    for value in re.findall(
-        r"slack\s+\((?:VIOLATED|MET)\)\s*",
-        text,
+    slack_pattern = re.compile(
+        r"([-+]?\d+(?:\.\d+)?)"
+        r"\s+slack\s+"
+        r"\((?:VIOLATED|MET)\)",
         re.I
-    ):
-        pass
+    )
 
-    # Capture numeric value immediately before slack status.
-    for value in re.findall(
-        r"([-+]?\d+(?:\.\d+)?)\s+slack\s+\((?:VIOLATED|MET)\)",
-        text,
-        re.I
-    ):
+    for match in slack_pattern.finditer(text):
 
         try:
-            slack_values.append(float(value))
+            slack_values.append(
+                float(match.group(1))
+            )
         except Exception:
             pass
 
+    # ------------------------------------------------------------
+    # Additional slack formats
+    # ------------------------------------------------------------
+
+    if not slack_values:
+
+        alternate_patterns = [
+
+            r"\bslack\b\s*[:=]\s*"
+            r"([-+]?\d+(?:\.\d+)?)",
+
+            r"\bslack\b.*?"
+            r"([-+]?\d+(?:\.\d+)?)",
+        ]
+
+        for pattern in alternate_patterns:
+
+            for value in re.findall(
+                pattern,
+                text,
+                re.I
+            ):
+
+                try:
+                    slack_values.append(
+                        float(value)
+                    )
+                except Exception:
+                    pass
+
+            if slack_values:
+                break
+
+    # ------------------------------------------------------------
+    # WNS = minimum slack
+    # ------------------------------------------------------------
+
     if slack_values:
-        result["WNS"] = min(slack_values)
+
+        result["WNS"] = round(
+            min(slack_values),
+            6
+        )
+
+        print(
+            f"[INFO] Setup WNS extracted: "
+            f"{result['WNS']}"
+        )
 
     # ------------------------------------------------------------
     # TNS
     #
-    # If an explicit TNS line exists, use it.
-    # Otherwise derive it from the report.
+    # First look for an explicit TNS / total negative slack
+    # summary.
     # ------------------------------------------------------------
 
-    tns_match = re.search(
-        r"\bTNS\b[^\n]*?([-+]?\d+(?:\.\d+)?)",
-        text,
-        re.I
-    )
+    explicit_tns_patterns = [
 
-    if tns_match:
+        # TNS: -123.45
+        r"\bTNS\b\s*[:=]\s*"
+        r"([-+]?\d+(?:\.\d+)?)",
 
-        result["TNS"] = float(tns_match.group(1))
+        # TNS -123.45
+        r"\bTNS\b\s+"
+        r"([-+]?\d+(?:\.\d+)?)",
+
+        # Total Negative Slack: -123.45
+        r"\btotal\s+negative\s+slack\b"
+        r"\s*[:=]\s*"
+        r"([-+]?\d+(?:\.\d+)?)",
+
+        # Total Negative Slack -123.45
+        r"\btotal\s+negative\s+slack\b"
+        r"[^\n]*?"
+        r"([-+]?\d+(?:\.\d+)?)",
+
+        # negative slack: -123.45
+        r"\bnegative\s+slack\b"
+        r"\s*[:=]\s*"
+        r"([-+]?\d+(?:\.\d+)?)",
+    ]
+
+    explicit_tns = None
+
+    for pattern in explicit_tns_patterns:
+
+        match = re.search(
+            pattern,
+            text,
+            re.I
+        )
+
+        if match:
+
+            try:
+
+                explicit_tns = float(
+                    match.group(1)
+                )
+
+                if math.isfinite(explicit_tns):
+                    break
+
+            except Exception:
+                pass
+
+    if explicit_tns is not None:
+
+        result["TNS"] = round(
+            explicit_tns,
+            6
+        )
+
+        print(
+            f"[INFO] Setup TNS extracted explicitly: "
+            f"{result['TNS']}"
+        )
 
     # ------------------------------------------------------------
-    # Find the worst setup path
+    # TNS fallback
     #
-    # We select the path having the minimum slack.
+    # If the report does not contain a TNS summary, calculate TNS
+    # from ALL reported negative setup slacks.
+    #
+    # IMPORTANT:
+    # This is only a fallback because a report containing only
+    # selected paths can underestimate true design-level TNS.
+    # ------------------------------------------------------------
+
+    elif slack_values:
+
+        negative_slacks = [
+            value
+            for value in slack_values
+            if value < 0
+        ]
+
+        if negative_slacks:
+
+            result["TNS"] = round(
+                sum(negative_slacks),
+                6
+            )
+
+        else:
+
+            result["TNS"] = 0.0
+
+        print(
+            f"[INFO] Setup TNS derived from reported slacks: "
+            f"{result['TNS']}"
+        )
+
+    # ------------------------------------------------------------
+    # Find worst setup path
     # ------------------------------------------------------------
 
     path_blocks = re.split(
         r"(?=Startpoint:)",
-        text
+        text,
+        flags=re.I
     )
 
     worst_block = None
@@ -664,37 +868,60 @@ def parse_timing_report():
 
     for block in path_blocks:
 
-        if "Startpoint:" not in block:
-            continue
-
-        m = re.search(
-            r"([-+]?\d+(?:\.\d+)?)\s+slack\s+\((?:VIOLATED|MET)\)",
+        if not re.search(
+            r"Startpoint:",
             block,
             re.I
-        )
-
-        if not m:
+        ):
             continue
 
-        slack = float(m.group(1))
+        matches = slack_pattern.findall(block)
 
-        if worst_slack is None or slack < worst_slack:
+        if not matches:
+            continue
+
+        try:
+            slack = float(matches[-1])
+        except Exception:
+            continue
+
+        if (
+            worst_slack is None
+            or slack < worst_slack
+        ):
+
             worst_slack = slack
             worst_block = block
+
+    # ------------------------------------------------------------
+    # If no Startpoint blocks were found, use whole report
+    # ------------------------------------------------------------
+
+    if worst_block is None and slack_values:
+
+        worst_block = text
+
+        worst_slack = min(
+            slack_values
+        )
+
+    # ------------------------------------------------------------
+    # Critical path information
+    # ------------------------------------------------------------
 
     if worst_block:
 
         # --------------------------------------------------------
-        # Extract instances from timing path.
-        #
-        # Example:
-        #
-        # _05480_/X (sky130_fd_sc_hd__xor3_1)
+        # Extract cells
         # --------------------------------------------------------
 
         cell_matches = re.findall(
-            r"([A-Za-z0-9_$.\[\]-]+)/(?:[A-Za-z0-9_$.\[\]-]+)"
-            r"\s+\(sky130_fd_sc_hd__([A-Za-z0-9_]+)\)",
+            r"([A-Za-z0-9_$.\[\]/-]+)"
+            r"/[A-Za-z0-9_$.\[\]-]+"
+            r"\s+\("
+            r"(?:sky130_fd_sc_hd__)?"
+            r"([A-Za-z0-9_]+)"
+            r"\)",
             worst_block
         )
 
@@ -702,16 +929,15 @@ def parse_timing_report():
 
         for inst, master in cell_matches:
 
-            cells.append({
-                "inst": inst,
-                "master": master.lower()
-            })
+            cells.append(
+                {
+                    "inst": inst,
+                    "master": master.lower(),
+                }
+            )
 
         # --------------------------------------------------------
         # LOGIC DEPTH
-        #
-        # Count combinational cells.
-        # Sequential cells are excluded.
         # --------------------------------------------------------
 
         combinational_cells = []
@@ -723,12 +949,16 @@ def parse_timing_report():
             is_sequential = bool(
                 re.search(
                     r"(dff|dfr|dfb|dfx|dlr|latch)",
-                    master
+                    master,
+                    re.I
                 )
             )
 
             if not is_sequential:
-                combinational_cells.append(cell)
+
+                combinational_cells.append(
+                    cell
+                )
 
         if combinational_cells:
 
@@ -738,17 +968,15 @@ def parse_timing_report():
 
         # --------------------------------------------------------
         # CRITICAL PATH WIRELENGTH
-        #
-        # Obtain component coordinates from final.def.
-        # Then calculate Manhattan distance between consecutive
-        # cells appearing in the actual critical timing path.
-        #
-        # This is an estimated critical-path physical length.
         # --------------------------------------------------------
 
-        def_data = parse_def(FINAL_DEF)
+        def_data = parse_def(
+            FINAL_DEF
+        )
 
-        components = def_data["components"]
+        components = def_data[
+            "components"
+        ]
 
         path_points = []
 
@@ -761,22 +989,35 @@ def parse_timing_report():
                 c = components[inst]
 
                 path_points.append(
-                    (c["x"], c["y"])
+                    (
+                        c["x"],
+                        c["y"]
+                    )
                 )
 
         if len(path_points) >= 2:
 
             distance = 0.0
 
-            for i in range(1, len(path_points)):
+            for i in range(
+                1,
+                len(path_points)
+            ):
 
                 x1, y1 = path_points[i - 1]
                 x2, y2 = path_points[i]
 
-                distance += abs(x2 - x1)
-                distance += abs(y2 - y1)
+                distance += abs(
+                    x2 - x1
+                )
 
-            result["crit_path_wirelength"] = round(
+                distance += abs(
+                    y2 - y1
+                )
+
+            result[
+                "crit_path_wirelength"
+            ] = round(
                 distance / 1000.0,
                 6
             )
@@ -921,14 +1162,78 @@ def main():
 
     congestion = extract_congestion()
 
-    # ------------------------------------------------------------
-    # Timing
-    # ------------------------------------------------------------
+   # ------------------------------------------------------------
+# Timing
+# ------------------------------------------------------------
 
-    timing = parse_timing_report()
+def extract_scalar_report(path, metric_name):
+    """
+    Extract a scalar metric from a simple report such as:
 
-    hold = parse_hold_timing()
+        wns -21.28
+        tns -2649.80
 
+    Returns None if the file does not exist or the metric cannot be parsed.
+    """
+    if not path.exists():
+        print(f"[WARN] {path.name} not found.")
+        return None
+
+    try:
+        text = path.read_text(errors="ignore").strip()
+    except Exception as e:
+        print(f"[WARN] Could not read {path}: {e}")
+        return None
+
+    if not text:
+        print(f"[WARN] {path.name} is empty.")
+        return None
+
+    pattern = rf"\b{re.escape(metric_name)}\b\s*[:=]?\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)"
+
+    match = re.search(pattern, text, re.IGNORECASE)
+
+    if match:
+        value = float(match.group(1))
+        print(f"[INFO] {metric_name.upper()} extracted from {path.name}: {value}")
+        return value
+
+    print(f"[WARN] Could not find {metric_name} in {path.name}")
+    return None
+
+
+# ------------------------------------------------------------
+# Parse timing reports
+# ------------------------------------------------------------
+
+timing = parse_timing_report()
+
+# ------------------------------------------------------------
+# AUTHORITATIVE SETUP WNS / TNS
+# ------------------------------------------------------------
+# timing_setup.rpt is used for:
+#   - logic depth
+#   - critical path wirelength
+#
+# Dedicated summary files are authoritative for:
+#   - WNS
+#   - TNS
+
+setup_wns = extract_scalar_report(WNS_SETUP, "wns")
+setup_tns = extract_scalar_report(TNS_SETUP, "tns")
+
+if setup_wns is not None:
+    timing["WNS"] = round(setup_wns, 6)
+
+if setup_tns is not None:
+    timing["TNS"] = round(setup_tns, 6)
+
+
+# ------------------------------------------------------------
+# Hold timing
+# ------------------------------------------------------------
+
+hold = parse_hold_timing()
     # ------------------------------------------------------------
     # Pin density
     # ------------------------------------------------------------

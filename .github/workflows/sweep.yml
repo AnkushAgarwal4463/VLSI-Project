@@ -826,7 +826,31 @@ jobs:
               echo "FILE NOT FOUND"
             fi
           done
-
+      - name: Debug routing artifacts
+        shell: bash
+        run: |
+          echo "=============================================="
+          echo "ROUTING FILE CHECK"
+          echo "=============================================="
+      
+          echo "Current directory:"
+          pwd
+      
+          echo ""
+          echo "Run directory:"
+          ls -lah "systolic_project/runs/${RUN_TAG}" || true
+      
+          echo ""
+          echo "Searching entire workspace:"
+          find . -type f \( \
+            -name "wirelength_global.rpt" -o \
+            -name "wirelength_detailed.rpt" -o \
+            -name "wirelength_final.rpt" -o \
+            -name "congestion.rpt" -o \
+            -name "route_status_final.rpt" \
+          \) -print
+          
+          echo "=============================================="
       # ================================================================
       # FEATURE EXTRACTION
       # ================================================================

@@ -328,10 +328,11 @@ set congestion_report \
 
 if {[catch {
     global_route \
-        -guide_file $route_guide \
-        -congestion_report_file $congestion_report \
-        -congestion_report_iter_step 1 \
-        -congestion_iterations 100
+    -guide_file $route_guide \
+    -congestion_report_file $congestion_report \
+    -congestion_report_iter_step 1 \
+    -congestion_iterations 100 \
+    -verbose
 } err]} {
     puts "\[ERROR\] Global routing failed:"
     puts "$err"
@@ -341,6 +342,19 @@ if {[catch {
 if {![file exists $route_guide]} {
     puts "\[ERROR\] route.guide was not generated."
     exit 1
+}
+# ----------------------------------------------------------------------
+# Global routing segments
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Writing global route segments..."
+
+if {[catch {
+    write_global_route_segments \
+        "${run_dir}/global_route_segments.txt"
+} err]} {
+    puts "\[WARNING\] Global route segment export failed:"
+    puts "$err"
 }
 
 # ----------------------------------------------------------------------
@@ -366,7 +380,8 @@ if {[catch {
 puts "\[INFO\] Running detailed routing..."
 
 if {[catch {
-    detailed_route
+    detailed_route \
+        -output_drc "${run_dir}/detailed_route_drc.rpt"
 } err]} {
     puts "\[ERROR\] Detailed routing failed:"
     puts "$err"

@@ -328,21 +328,26 @@ set congestion_report \
 
 if {[catch {
     global_route \
-    -guide_file $route_guide \
-    -congestion_report_file $congestion_report \
-    -congestion_report_iter_step 1 \
-    -congestion_iterations 100 \
-    -verbose
+        -guide_file $route_guide \
+        -congestion_report_file $congestion_report \
+        -congestion_report_iter_step 1 \
+        -congestion_iterations 100 \
+        -verbose
 } err]} {
+
     puts "\[ERROR\] Global routing failed:"
     puts "$err"
     exit 1
 }
 
 if {![file exists $route_guide]} {
+
     puts "\[ERROR\] route.guide was not generated."
     exit 1
 }
+
+puts "\[INFO\] Global routing completed."
+
 # ----------------------------------------------------------------------
 # Global routing segments
 # ----------------------------------------------------------------------
@@ -350,9 +355,12 @@ if {![file exists $route_guide]} {
 puts "\[INFO\] Writing global route segments..."
 
 if {[catch {
+
     write_global_route_segments \
         "${run_dir}/global_route_segments.txt"
+
 } err]} {
+
     puts "\[WARNING\] Global route segment export failed:"
     puts "$err"
 }
@@ -364,15 +372,45 @@ if {[catch {
 puts "\[INFO\] Measuring global-route wirelength..."
 
 if {[catch {
+
     report_wire_length \
         -global_route \
         -verbose \
         -file "${run_dir}/wirelength_global.rpt"
+
 } err]} {
+
     puts "\[WARNING\] Global-route wirelength report failed:"
     puts "$err"
 }
 
+# ----------------------------------------------------------------------
+# Check global-route reports
+# ----------------------------------------------------------------------
+
+if {[file exists $congestion_report]} {
+
+    set congestion_size \
+        [file size $congestion_report]
+
+    puts "\[INFO\] congestion.rpt size: $congestion_size bytes"
+
+} else {
+
+    puts "\[WARNING\] congestion.rpt was not generated."
+}
+
+if {[file exists "${run_dir}/wirelength_global.rpt"]} {
+
+    set wl_size \
+        [file size "${run_dir}/wirelength_global.rpt"]
+
+    puts "\[INFO\] wirelength_global.rpt size: $wl_size bytes"
+
+} else {
+
+    puts "\[WARNING\] wirelength_global.rpt was not generated."
+}
 # ----------------------------------------------------------------------
 # 16. Detailed routing
 # ----------------------------------------------------------------------
@@ -383,9 +421,27 @@ if {[catch {
     detailed_route \
         -output_drc "${run_dir}/detailed_route_drc.rpt"
 } err]} {
+
     puts "\[ERROR\] Detailed routing failed:"
     puts "$err"
     exit 1
+}
+
+puts "\[INFO\] Detailed routing completed."
+
+# ----------------------------------------------------------------------
+# Route status
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Checking final routing status..."
+
+if {[catch {
+    report_route_status \
+        -file "${run_dir}/route_status_final.rpt"
+} err]} {
+
+    puts "\[WARNING\] Route status report failed:"
+    puts "$err"
 }
 
 # ----------------------------------------------------------------------
@@ -395,32 +451,76 @@ if {[catch {
 puts "\[INFO\] Measuring detailed-route wirelength..."
 
 if {[catch {
+
     report_wire_length \
         -detailed_route \
         -verbose \
         -file "${run_dir}/wirelength_detailed.rpt"
+
 } err]} {
+
     puts "\[WARNING\] Detailed-route wirelength report failed:"
     puts "$err"
 }
 
 # ----------------------------------------------------------------------
+# Check detailed-route reports
+# ----------------------------------------------------------------------
+
+if {[file exists "${run_dir}/route_status_final.rpt"]} {
+
+    set route_status_size \
+        [file size "${run_dir}/route_status_final.rpt"]
+
+    puts "\[INFO\] route_status_final.rpt size: $route_status_size bytes"
+
+} else {
+
+    puts "\[WARNING\] route_status_final.rpt was not generated."
+}
+
+if {[file exists "${run_dir}/wirelength_detailed.rpt"]} {
+
+    set wl_size \
+        [file size "${run_dir}/wirelength_detailed.rpt"]
+
+    puts "\[INFO\] wirelength_detailed.rpt size: $wl_size bytes"
+
+} else {
+
+    puts "\[WARNING\] wirelength_detailed.rpt was not generated."
+}
+
+# ----------------------------------------------------------------------
 # 18. Final DEF
 #
-# This gives Python a technology-independent representation of the
-# final routed design from which wirelength and via count can be
-# independently calculated.
+# This gives Python the final routed design representation.
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Writing final DEF..."
 
 if {[catch {
+
     write_def \
         -version 5.8 \
         "${run_dir}/final.def"
+
 } err]} {
+
     puts "\[WARNING\] write_def failed:"
     puts "$err"
+}
+
+if {[file exists "${run_dir}/final.def"]} {
+
+    set def_size \
+        [file size "${run_dir}/final.def"]
+
+    puts "\[INFO\] final.def size: $def_size bytes"
+
+} else {
+
+    puts "\[WARNING\] final.def was not generated."
 }
 
 # ----------------------------------------------------------------------

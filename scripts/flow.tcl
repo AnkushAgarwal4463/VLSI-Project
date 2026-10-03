@@ -340,13 +340,24 @@ if {[catch {
     exit 1
 }
 
-if {![file exists $route_guide]} {
+puts "\[INFO\] Global routing completed."
 
+# ----------------------------------------------------------------------
+# Verify global routing
+# ----------------------------------------------------------------------
+
+if {![file exists $route_guide]} {
     puts "\[ERROR\] route.guide was not generated."
     exit 1
 }
 
-puts "\[INFO\] Global routing completed."
+puts "\[OK\] route.guide generated: [file size $route_guide] bytes"
+
+if {[file exists $congestion_report]} {
+    puts "\[INFO\] congestion.rpt generated: [file size $congestion_report] bytes"
+} else {
+    puts "\[WARNING\] congestion.rpt was not generated."
+}
 
 # ----------------------------------------------------------------------
 # Global routing segments
@@ -355,10 +366,8 @@ puts "\[INFO\] Global routing completed."
 puts "\[INFO\] Writing global route segments..."
 
 if {[catch {
-
     write_global_route_segments \
         "${run_dir}/global_route_segments.txt"
-
 } err]} {
 
     puts "\[WARNING\] Global route segment export failed:"
@@ -366,24 +375,44 @@ if {[catch {
 }
 
 # ----------------------------------------------------------------------
-# Check congestion report
+# 15. Global-route wirelength
+#
+# IMPORTANT:
+# This OpenROAD build may require an explicit -net list for
+# report_wire_length. Therefore we pass all design nets explicitly.
 # ----------------------------------------------------------------------
 
-if {[file exists $congestion_report]} {
+puts "\[INFO\] Measuring global-route wirelength..."
 
-    set congestion_size \
-        [file size $congestion_report]
+set all_nets [get_nets *]
 
-    puts "\[INFO\] congestion.rpt generated."
-    puts "\[INFO\] congestion.rpt size: $congestion_size bytes"
+puts "\[INFO\] Number of nets supplied to wirelength report: [llength $all_nets]"
+
+if {[catch {
+    report_wire_length \
+        -net $all_nets \
+        -global_route \
+        -verbose \
+        -file "${run_dir}/wirelength_global.rpt"
+} err]} {
+
+    puts "\[WARNING\] Global-route wirelength report failed:"
+    puts "$err"
+}
+
+if {[file exists "${run_dir}/wirelength_global.rpt"]} {
+
+    set wl_size [file size "${run_dir}/wirelength_global.rpt"]
+
+    puts "\[INFO\] wirelength_global.rpt generated: $wl_size bytes"
 
 } else {
 
-    puts "\[WARNING\] congestion.rpt was not generated."
+    puts "\[WARNING\] wirelength_global.rpt was not generated."
 }
 
 # ----------------------------------------------------------------------
-# 15. Detailed routing
+# 16. Detailed routing
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Running detailed routing..."
@@ -403,16 +432,10 @@ if {[catch {
 puts "\[INFO\] Detailed routing completed."
 
 # ----------------------------------------------------------------------
-# 16. Final DEF
+# Final DEF
 #
-# The final DEF contains the routed geometry.
-# Python will use this file later to calculate:
-#
-#   - routed wirelength
-#   - via count
-#
-# We intentionally do not use report_wire_length here because this
-# OpenROAD version requires the -net option.
+# The final DEF contains the routed geometry and is retained for
+# independent Python extraction of wirelength and vias.
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Writing final DEF..."
@@ -436,14 +459,106 @@ if {![file exists "${run_dir}/final.def"]} {
     exit 1
 }
 
-set def_size \
-    [file size "${run_dir}/final.def"]
+set def_size [file size "${run_dir}/final.def"]
 
-puts "\[INFO\] final.def generated."
-puts "\[INFO\] final.def size: $def_size bytes"
+puts "\[OK\] final.def generated: $def_size bytes"
 
 # ----------------------------------------------------------------------
-# 17. Final database
+# Detailed-route wirelength
+#
+# Use the explicit net list here as well.
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Measuring detailed-route wirelength..."
+
+if {[catch {
+
+    report_wire_length \
+        -net $all_nets \
+        -detailed_route \
+        -verbose \
+        -file "${run_dir}/wirelength_detailed.rpt"
+
+} err]} {
+
+    puts "\[WARNING\] Detailed-route wirelength report failed:"
+    puts "$err"
+}
+
+if {[file exists "${run_dir}/wirelength_detailed.rpt"]} {
+
+    set wl_size [file size "${run_dir}/wirelength_detailed.rpt"]
+
+    puts "\[INFO\] wirelength_detailed.rpt generated: $wl_size bytes"
+
+} else {
+
+    puts "\[WARNING\] wirelength_detailed.rpt was not generated."
+}
+
+# ----------------------------------------------------------------------
+# Final wirelength
+#
+# Run the detailed-route report again after final DEF creation so that
+# the saved final database and the wirelength report refer to the same
+# routed design state.
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Measuring final wirelength..."
+
+if {[catch {
+
+    report_wire_length \
+        -net $all_nets \
+        -detailed_route \
+        -verbose \
+        -file "${run_dir}/wirelength_final.rpt"
+
+} err]} {
+
+    puts "\[WARNING\] Final wirelength report failed:"
+    puts "$err"
+}
+
+if {[file exists "${run_dir}/wirelength_final.rpt"]} {
+
+    set wl_size [file size "${run_dir}/wirelength_final.rpt"]
+
+    puts "\[INFO\] wirelength_final.rpt generated: $wl_size bytes"
+
+} else {
+
+    puts "\[WARNING\] wirelength_final.rpt was not generated."
+}
+
+# ----------------------------------------------------------------------
+# Final routing status
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Generating final routing status..."
+
+if {[catch {
+
+    report_route_status \
+        > "${run_dir}/route_status_final.rpt"
+
+} err]} {
+
+    puts "\[WARNING\] Routing status report failed:"
+    puts "$err"
+}
+
+if {[file exists "${run_dir}/route_status_final.rpt"]} {
+
+    puts "\[INFO\] route_status_final.rpt generated: [file size "${run_dir}/route_status_final.rpt"] bytes"
+
+} else {
+
+    puts "\[WARNING\] route_status_final.rpt was not generated."
+}
+
+# ----------------------------------------------------------------------
+# Final OpenDB
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Saving final OpenROAD database..."
@@ -466,11 +581,44 @@ if {![file exists "${run_dir}/final.odb"]} {
     exit 1
 }
 
-set odb_size \
-    [file size "${run_dir}/final.odb"]
+set odb_size [file size "${run_dir}/final.odb"]
 
-puts "\[INFO\] final.odb generated."
-puts "\[INFO\] final.odb size: $odb_size bytes"
+puts "\[OK\] final.odb generated: $odb_size bytes"
+
+# ----------------------------------------------------------------------
+# Routing artifact diagnostic
+#
+# This is deliberately inside OpenROAD. It tells us whether the files
+# were actually created before GitHub Actions/Python touches them.
+# ----------------------------------------------------------------------
+
+puts ""
+puts "=============================================="
+puts "ROUTING ARTIFACT DIAGNOSTIC"
+puts "=============================================="
+
+foreach f [list \
+    "${run_dir}/route.guide" \
+    "${run_dir}/global_route_segments.txt" \
+    "${run_dir}/congestion.rpt" \
+    "${run_dir}/wirelength_global.rpt" \
+    "${run_dir}/wirelength_detailed.rpt" \
+    "${run_dir}/wirelength_final.rpt" \
+    "${run_dir}/route_status_final.rpt" \
+    "${run_dir}/final.def" \
+    "${run_dir}/final.odb"] {
+
+    if {[file exists $f]} {
+
+        puts "\[FOUND\] $f : [file size $f] bytes"
+
+    } else {
+
+        puts "\[MISSING\] $f"
+    }
+}
+
+puts "=============================================="
 
 # ----------------------------------------------------------------------
 # 18. Setup timing
@@ -577,6 +725,10 @@ foreach f [list \
     "${run_dir}/route.guide" \
     "${run_dir}/global_route_segments.txt" \
     "${run_dir}/congestion.rpt" \
+    "${run_dir}/wirelength_global.rpt" \
+    "${run_dir}/wirelength_detailed.rpt" \
+    "${run_dir}/wirelength_final.rpt" \
+    "${run_dir}/route_status_final.rpt" \
     "${run_dir}/detailed_route_drc.rpt" \
     "${run_dir}/timing_setup.rpt" \
     "${run_dir}/timing_hold.rpt" \
@@ -616,6 +768,10 @@ puts "  final.def"
 puts "  route.guide"
 puts "  global_route_segments.txt"
 puts "  congestion.rpt"
+puts "  wirelength_global.rpt"
+puts "  wirelength_detailed.rpt"
+puts "  wirelength_final.rpt"
+puts "  route_status_final.rpt"
 puts "  detailed_route_drc.rpt"
 puts "  timing_setup.rpt"
 puts "  timing_hold.rpt"

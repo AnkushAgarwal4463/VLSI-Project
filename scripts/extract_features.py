@@ -48,6 +48,7 @@ def read_text(path):
 
 def first_float(patterns, text):
     for pattern in patterns:
+
         match = re.search(
             pattern,
             text,
@@ -55,8 +56,10 @@ def first_float(patterns, text):
         )
 
         if match:
+
             try:
                 return float(match.group(1))
+
             except (ValueError, IndexError):
                 pass
 
@@ -72,6 +75,7 @@ def extract_netlist_stats():
     text = read_text(NETLIST)
 
     if not text:
+
         return {
             "num_cells": None,
             "num_nets": None,
@@ -145,6 +149,7 @@ def extract_netlist_stats():
             or "__clkbuf" in master_lower
             or master_lower.endswith("_buf")
         ):
+
             num_buffers += 1
 
     return {
@@ -162,7 +167,11 @@ def extract_netlist_stats():
 def query_odb():
 
     if not ODB.exists():
-        print("[WARNING] final.odb not found.")
+
+        print(
+            "[WARNING] final.odb not found."
+        )
+
         return {}
 
     tcl_script = r'''
@@ -280,13 +289,19 @@ foreach inst $insts {
         [string match "*__buf*" $master_lower] ||
         [string match "*__clkbuf*" $master_lower]
     } {
+
         incr buffer_count
     }
 }
 
 puts "METRIC NUM_BUFFERS $buffer_count"
+
 # ============================================================
-# ROUTED WIRE / VIA INFORMATION
+# ROUTED NET COUNT
+#
+# IMPORTANT:
+# This is NOT the same as VIA COUNT.
+# It is only a diagnostic metric.
 # ============================================================
 
 set routed_net_count 0
@@ -348,6 +363,7 @@ exit
 
         try:
             os.remove(script_path)
+
         except OSError:
             pass
 
@@ -401,17 +417,22 @@ def extract_wirelength_report():
         if not text.strip():
             continue
 
-        # --------------------------------------------------------
-        # Common OpenROAD report_wire_length formats
-        # --------------------------------------------------------
-
         patterns = [
-            r"\btotal_wl\s+([0-9]+(?:\.[0-9]+)?)",
-            r"\btotal_wirelength\s+([0-9]+(?:\.[0-9]+)?)",
-            r"\btotal\s+wirelength\s*[:=]\s*([0-9]+(?:\.[0-9]+)?)",
+
+            r"\btotal_wl\s+"
+            r"([0-9]+(?:\.[0-9]+)?)",
+
+            r"\btotal_wirelength\s+"
+            r"([0-9]+(?:\.[0-9]+)?)",
+
+            r"\btotal\s+wirelength\s*[:=]\s*"
+            r"([0-9]+(?:\.[0-9]+)?)",
         ]
 
-        value = first_float(patterns, text)
+        value = first_float(
+            patterns,
+            text
+        )
 
         if value is not None:
             return value
@@ -420,139 +441,20 @@ def extract_wirelength_report():
 
 
 # ================================================================
-# DEF routed wirelength + via count
+# DEF / routing metrics
+#
+# The previous DEF parser attempted to infer vias from DEF tokens.
+# That was not reliable, so VIA_COUNT remains unavailable until
+# we implement a proper OpenDB routing-object query.
 # ================================================================
 
 def extract_def_routing_metrics():
 
     text = read_text(DEF)
 
-        return {
-            "wirelength_um": None,
-            "via_count": None,
-        }
-
-    # ------------------------------------------------------------
-    # DEF coordinates are normally integer database units.
-    #
-    # We obtain the DBU/um value from final.odb below.
-    # ------------------------------------------------------------
-
-    dbu = 1000.0
-
-    odb_metrics = query_odb()
-
-    if "DBU_PER_MICRON" in odb_metrics:
-        dbu = float(odb_metrics["DBU_PER_MICRON"])
-
-    # ------------------------------------------------------------
-    # Count explicit VIA tokens in routed NET sections.
-    # ------------------------------------------------------------
-
-    via_count = 0
-
-    in_nets = False
-
-    for line in text.splitlines():
-
-        stripped = line.strip()
-
-        if stripped.startswith("NETS "):
-            in_nets = True
-            continue
-
-        if stripped == "END NETS":
-            in_nets = False
-            continue
-
-        if not in_nets:
-            continue
-
-        # DEF routed nets can contain:
-        #
-        # + ROUTED ...
-        # VIA_NAME
-        #
-        # Count tokens that look like via definitions.
-        #
-        tokens = stripped.replace("(", " ").replace(")", " ").split()
-
-        for token in tokens:
-
-            if (
-                token.startswith("M")
-                and "/" in token
-            ):
-                via_count += 1
-
-    # ------------------------------------------------------------
-    # Routed wirelength
-    #
-    # Parse ROUTED coordinate pairs.
-    # This is a fallback metric when report_wire_length does not
-    # contain the total value.
-    # ------------------------------------------------------------
-
-    total_length_dbu = 0.0
-
-    in_nets = False
-
-    route_x = None
-    route_y = None
-
-    coordinate_pattern = re.compile(
-        r"\(\s*(-?\d+)\s+(-?\d+)\s*\)"
-    )
-
-    for line in text.splitlines():
-
-        stripped = line.strip()
-
-        if stripped.startswith("NETS "):
-            in_nets = True
-            route_x = None
-            route_y = None
-            continue
-
-        if stripped == "END NETS":
-            in_nets = False
-            continue
-
-        if not in_nets:
-            continue
-
-        if "ROUTED" not in stripped and \
-           "NEW" not in stripped and \
-           "FIXED" not in stripped:
-            continue
-
-        coords = coordinate_pattern.findall(stripped)
-
-        for x_string, y_string in coords:
-
-            x = float(x_string)
-            y = float(y_string)
-
-            if route_x is not None and route_y is not None:
-
-                # Manhattan routed segment.
-                total_length_dbu += abs(x - route_x)
-                total_length_dbu += abs(y - route_y)
-
-            route_x = x
-            route_y = y
-
-    wirelength_um = None
-
-    if total_length_dbu > 0:
-
-        wirelength_um = (
-            total_length_dbu / dbu
-        )
-
     return {
-        "wirelength_um": wirelength_um,
-        "via_count": via_count,
+        "wirelength_um": None,
+        "via_count": None,
     }
 
 
@@ -581,7 +483,10 @@ def extract_congestion():
         r"([0-9]+(?:\.[0-9]+)?)",
     ]
 
-    value = first_float(patterns, text)
+    value = first_float(
+        patterns,
+        text
+    )
 
     return value
 
@@ -592,20 +497,38 @@ def extract_congestion():
 
 def extract_timing():
 
+    # ------------------------------------------------------------
+    # Setup WNS
+    # ------------------------------------------------------------
+
     setup_wns = first_float(
         [
-            r"\bwns\s+(-?[0-9]+(?:\.[0-9]+)?)",
-            r"wns\s*[:=]\s*(-?[0-9]+(?:\.[0-9]+)?)",
+            r"\bwns\s+"
+            r"(-?[0-9]+(?:\.[0-9]+)?)",
+
+            r"wns\s*[:=]\s*"
+            r"(-?[0-9]+(?:\.[0-9]+)?)",
         ],
-        read_text(RUN_DIR / "wns_setup.rpt")
+        read_text(
+            RUN_DIR / "wns_setup.rpt"
+        )
     )
+
+    # ------------------------------------------------------------
+    # Setup TNS
+    # ------------------------------------------------------------
 
     setup_tns = first_float(
         [
-            r"\btns\s+(-?[0-9]+(?:\.[0-9]+)?)",
-            r"tns\s*[:=]\s*(-?[0-9]+(?:\.[0-9]+)?)",
+            r"\btns\s+"
+            r"(-?[0-9]+(?:\.[0-9]+)?)",
+
+            r"tns\s*[:=]\s*"
+            r"(-?[0-9]+(?:\.[0-9]+)?)",
         ],
-        read_text(RUN_DIR / "tns_setup.rpt")
+        read_text(
+            RUN_DIR / "tns_setup.rpt"
+        )
     )
 
     # ------------------------------------------------------------
@@ -638,24 +561,29 @@ def extract_timing():
 
     # ------------------------------------------------------------
     # Hold TNS
-    #
-    # If OpenROAD generated tns_hold.rpt, use it.
-    # Otherwise calculate the sum of all negative slacks.
     # ------------------------------------------------------------
 
     hold_tns = first_float(
         [
-            r"\btns\s+(-?[0-9]+(?:\.[0-9]+)?)",
-            r"tns\s*[:=]\s*(-?[0-9]+(?:\.[0-9]+)?)",
+            r"\btns\s+"
+            r"(-?[0-9]+(?:\.[0-9]+)?)",
+
+            r"tns\s*[:=]\s*"
+            r"(-?[0-9]+(?:\.[0-9]+)?)",
         ],
-        read_text(RUN_DIR / "tns_hold.rpt")
+        read_text(
+            RUN_DIR / "tns_hold.rpt"
+        )
     )
 
     if hold_tns is None and hold_slacks:
 
         negative_slacks = [
+
             float(value)
+
             for value in hold_slacks
+
             if float(value) < 0
         ]
 
@@ -664,12 +592,13 @@ def extract_timing():
             hold_tns = sum(
                 negative_slacks
             )
+
         else:
 
             hold_tns = 0.0
 
     # ------------------------------------------------------------
-    # ns -> ps
+    # Convert ns -> ps
     # ------------------------------------------------------------
 
     if setup_wns is not None:
@@ -702,8 +631,13 @@ def main():
     print("FEATURE EXTRACTION")
     print("=" * 70)
 
-    print(f"Run tag : {RUN_TAG}")
-    print(f"Run dir : {RUN_DIR}")
+    print(
+        f"Run tag : {RUN_TAG}"
+    )
+
+    print(
+        f"Run dir : {RUN_DIR}"
+    )
 
     RUN_DIR.mkdir(
         parents=True,
@@ -767,7 +701,9 @@ def main():
 
     netlist_stats = extract_netlist_stats()
 
-    features.update(netlist_stats)
+    features.update(
+        netlist_stats
+    )
 
     # ------------------------------------------------------------
     # ODB
@@ -776,26 +712,32 @@ def main():
     odb_metrics = query_odb()
 
     if "NUM_CELLS" in odb_metrics:
+
         features["num_cells"] = \
             odb_metrics["NUM_CELLS"]
 
     if "NUM_NETS" in odb_metrics:
+
         features["num_nets"] = \
             odb_metrics["NUM_NETS"]
 
     if "NUM_PINS" in odb_metrics:
+
         features["num_pins"] = \
             odb_metrics["NUM_PINS"]
 
     if "NUM_BUFFERS" in odb_metrics:
+
         features["num_buffers"] = \
             odb_metrics["NUM_BUFFERS"]
 
     if "DIE_AREA_UM2" in odb_metrics:
+
         features["die_area_um2"] = \
             odb_metrics["DIE_AREA_UM2"]
 
     if "CORE_AREA_UM2" in odb_metrics:
+
         features["core_area_um2"] = \
             odb_metrics["CORE_AREA_UM2"]
 
@@ -807,12 +749,16 @@ def main():
 
     if wirelength is not None:
 
-        features["wirelength_um"] = wirelength
+        features["wirelength_um"] = \
+            wirelength
 
         features["wirelength_available"] = True
 
     # ------------------------------------------------------------
-    # DEF fallback for wirelength + vias
+    # DEF routing metrics
+    #
+    # Currently only used as a placeholder.
+    # Do not use its via_count as a real via metric.
     # ------------------------------------------------------------
 
     def_metrics = extract_def_routing_metrics()
@@ -826,8 +772,11 @@ def main():
 
             features["wirelength_available"] = True
 
+    # IMPORTANT:
+    # Do NOT assign routed-net count or DEF token count to via_count.
+    # A real via-object query will be added separately.
+
     features["via_count"] = None
-        def_metrics["via_count"]
 
     # ------------------------------------------------------------
     # Congestion
@@ -848,7 +797,9 @@ def main():
 
     timing = extract_timing()
 
-    features.update(timing)
+    features.update(
+        timing
+    )
 
     if (
         timing["wns_setup_ps"] is not None
@@ -859,12 +810,14 @@ def main():
         features["timing_available"] = True
 
     # ------------------------------------------------------------
-    # ODB
+    # ODB existence check
     # ------------------------------------------------------------
 
     if ODB.exists():
 
-        print("[INFO] final.odb exists.")
+        print(
+            "[INFO] final.odb exists."
+        )
 
     else:
 
@@ -875,8 +828,11 @@ def main():
     # ------------------------------------------------------------
     # Final validity
     #
-    # A valid ML row now requires the core physical metrics and
-    # timing metrics.
+    # A valid ML row requires all required physical, routing,
+    # congestion, and timing metrics.
+    #
+    # Since via_count and routing_overflow are not available yet,
+    # valid_run will remain False until those metrics are obtained.
     # ------------------------------------------------------------
 
     features["valid_run"] = bool(
@@ -928,7 +884,10 @@ def main():
     print("FEATURE EXTRACTION COMPLETE")
     print("=" * 70)
 
-    print(f"Output: {OUTPUT}")
+    print(
+        f"Output: {OUTPUT}"
+    )
+
     print()
 
     for key, value in features.items():

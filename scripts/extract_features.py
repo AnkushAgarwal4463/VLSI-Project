@@ -285,6 +285,22 @@ foreach inst $insts {
 }
 
 puts "METRIC NUM_BUFFERS $buffer_count"
+# ============================================================
+# ROUTED WIRE / VIA INFORMATION
+# ============================================================
+
+set routed_net_count 0
+
+foreach net $nets {
+
+    set wire [$net getWire]
+
+    if {$wire != ""} {
+        incr routed_net_count
+    }
+}
+
+puts "METRIC ROUTED_NET_COUNT $routed_net_count"
 
 exit
 '''

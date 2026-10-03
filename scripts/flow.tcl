@@ -366,26 +366,7 @@ if {[catch {
 }
 
 # ----------------------------------------------------------------------
-# 15. Global-route wirelength
-# ----------------------------------------------------------------------
-
-puts "\[INFO\] Measuring global-route wirelength..."
-
-if {[catch {
-
-    report_wire_length \
-        -global_route \
-        -verbose \
-        -file "${run_dir}/wirelength_global.rpt"
-
-} err]} {
-
-    puts "\[WARNING\] Global-route wirelength report failed:"
-    puts "$err"
-}
-
-# ----------------------------------------------------------------------
-# Check global-route reports
+# Check congestion report
 # ----------------------------------------------------------------------
 
 if {[file exists $congestion_report]} {
@@ -393,6 +374,7 @@ if {[file exists $congestion_report]} {
     set congestion_size \
         [file size $congestion_report]
 
+    puts "\[INFO\] congestion.rpt generated."
     puts "\[INFO\] congestion.rpt size: $congestion_size bytes"
 
 } else {
@@ -400,26 +382,17 @@ if {[file exists $congestion_report]} {
     puts "\[WARNING\] congestion.rpt was not generated."
 }
 
-if {[file exists "${run_dir}/wirelength_global.rpt"]} {
-
-    set wl_size \
-        [file size "${run_dir}/wirelength_global.rpt"]
-
-    puts "\[INFO\] wirelength_global.rpt size: $wl_size bytes"
-
-} else {
-
-    puts "\[WARNING\] wirelength_global.rpt was not generated."
-}
 # ----------------------------------------------------------------------
-# 16. Detailed routing
+# 15. Detailed routing
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Running detailed routing..."
 
 if {[catch {
+
     detailed_route \
         -output_drc "${run_dir}/detailed_route_drc.rpt"
+
 } err]} {
 
     puts "\[ERROR\] Detailed routing failed:"
@@ -430,71 +403,16 @@ if {[catch {
 puts "\[INFO\] Detailed routing completed."
 
 # ----------------------------------------------------------------------
-# Route status
-# ----------------------------------------------------------------------
-
-puts "\[INFO\] Checking final routing status..."
-
-if {[catch {
-    report_route_status \
-        -file "${run_dir}/route_status_final.rpt"
-} err]} {
-
-    puts "\[WARNING\] Route status report failed:"
-    puts "$err"
-}
-
-# ----------------------------------------------------------------------
-# 17. Detailed-route wirelength
-# ----------------------------------------------------------------------
-
-puts "\[INFO\] Measuring detailed-route wirelength..."
-
-if {[catch {
-
-    report_wire_length \
-        -detailed_route \
-        -verbose \
-        -file "${run_dir}/wirelength_detailed.rpt"
-
-} err]} {
-
-    puts "\[WARNING\] Detailed-route wirelength report failed:"
-    puts "$err"
-}
-
-# ----------------------------------------------------------------------
-# Check detailed-route reports
-# ----------------------------------------------------------------------
-
-if {[file exists "${run_dir}/route_status_final.rpt"]} {
-
-    set route_status_size \
-        [file size "${run_dir}/route_status_final.rpt"]
-
-    puts "\[INFO\] route_status_final.rpt size: $route_status_size bytes"
-
-} else {
-
-    puts "\[WARNING\] route_status_final.rpt was not generated."
-}
-
-if {[file exists "${run_dir}/wirelength_detailed.rpt"]} {
-
-    set wl_size \
-        [file size "${run_dir}/wirelength_detailed.rpt"]
-
-    puts "\[INFO\] wirelength_detailed.rpt size: $wl_size bytes"
-
-} else {
-
-    puts "\[WARNING\] wirelength_detailed.rpt was not generated."
-}
-
-# ----------------------------------------------------------------------
-# 18. Final DEF
+# 16. Final DEF
 #
-# This gives Python the final routed design representation.
+# The final DEF contains the routed geometry.
+# Python will use this file later to calculate:
+#
+#   - routed wirelength
+#   - via count
+#
+# We intentionally do not use report_wire_length here because this
+# OpenROAD version requires the -net option.
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Writing final DEF..."
@@ -507,137 +425,145 @@ if {[catch {
 
 } err]} {
 
-    puts "\[WARNING\] write_def failed:"
+    puts "\[ERROR\] write_def failed:"
     puts "$err"
+    exit 1
 }
 
-if {[file exists "${run_dir}/final.def"]} {
+if {![file exists "${run_dir}/final.def"]} {
 
-    set def_size \
-        [file size "${run_dir}/final.def"]
-
-    puts "\[INFO\] final.def size: $def_size bytes"
-
-} else {
-
-    puts "\[WARNING\] final.def was not generated."
+    puts "\[ERROR\] final.def was not generated."
+    exit 1
 }
 
+set def_size \
+    [file size "${run_dir}/final.def"]
+
+puts "\[INFO\] final.def generated."
+puts "\[INFO\] final.def size: $def_size bytes"
+
 # ----------------------------------------------------------------------
-# 19. Final wirelength report
+# 17. Final database
 # ----------------------------------------------------------------------
 
-puts "\[INFO\] Measuring final wirelength..."
+puts "\[INFO\] Saving final OpenROAD database..."
 
 if {[catch {
-    report_wire_length \
-        -detailed_route \
-        -verbose \
-        -file "${run_dir}/wirelength_final.rpt"
+
+    write_db \
+        "${run_dir}/final.odb"
+
 } err]} {
-    puts "\[WARNING\] Final wirelength report failed:"
+
+    puts "\[ERROR\] write_db failed:"
     puts "$err"
+    exit 1
 }
 
-# ----------------------------------------------------------------------
-# 20. Routing status
-# ----------------------------------------------------------------------
+if {![file exists "${run_dir}/final.odb"]} {
 
-puts "\[INFO\] Generating routing status report..."
-
-if {[catch {
-    report_route_status \
-        > "${run_dir}/route_status_final.rpt"
-} err]} {
-    puts "\[WARNING\] Routing status report failed:"
-    puts "$err"
+    puts "\[ERROR\] final.odb was not created."
+    exit 1
 }
 
+set odb_size \
+    [file size "${run_dir}/final.odb"]
+
+puts "\[INFO\] final.odb generated."
+puts "\[INFO\] final.odb size: $odb_size bytes"
+
 # ----------------------------------------------------------------------
-# 21. Setup timing
+# 18. Setup timing
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Generating setup timing report..."
 
 if {[catch {
+
     report_checks \
         -path_delay max \
         -format full_clock_expanded \
         > "${run_dir}/timing_setup.rpt"
+
 } err]} {
+
     puts "\[WARNING\] Setup timing report failed:"
     puts "$err"
 }
 
 # ----------------------------------------------------------------------
-# 22. Hold timing
+# 19. Hold timing
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Generating hold timing report..."
 
 if {[catch {
+
     report_checks \
         -path_delay min \
         -format full_clock_expanded \
         > "${run_dir}/timing_hold.rpt"
+
 } err]} {
+
     puts "\[WARNING\] Hold timing report failed:"
     puts "$err"
 }
 
 # ----------------------------------------------------------------------
-# 23. Setup WNS / TNS
+# 20. Setup WNS / TNS
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Generating setup WNS/TNS..."
 
 if {[catch {
+
     report_wns \
         > "${run_dir}/wns_setup.rpt"
 
     report_tns \
         > "${run_dir}/tns_setup.rpt"
+
 } err]} {
+
     puts "\[WARNING\] Setup WNS/TNS failed:"
     puts "$err"
 }
 
 # ----------------------------------------------------------------------
-# 24. Hold WNS / TNS
+# 21. Hold WNS / TNS
 #
-# These files are retained, but Python will calculate hold WNS
-# directly from timing_hold.rpt if these reports are empty.
+# Do NOT use:
+#
+#     report_wns -min
+#     report_tns -min
+#
+# because this OpenROAD version does not support -min.
+#
+# Python will calculate hold WNS/TNS directly from timing_hold.rpt.
 # ----------------------------------------------------------------------
 
-puts "\[INFO\] Generating hold WNS/TNS..."
+puts "\[INFO\] Hold WNS/TNS will be extracted from timing_hold.rpt."
 
-if {[catch {
-    report_wns -min \
-        > "${run_dir}/wns_hold.rpt"
+# Create empty marker files so the expected filenames are not
+# accidentally interpreted as successful OpenROAD reports.
 
-    report_tns -min \
-        > "${run_dir}/tns_hold.rpt"
-} err]} {
-    puts "\[WARNING\] Hold WNS/TNS failed:"
-    puts "$err"
-}
+set hold_wns_file \
+    "${run_dir}/wns_hold.rpt"
 
-# ----------------------------------------------------------------------
-# 25. Final design database
-# ----------------------------------------------------------------------
+set hold_tns_file \
+    "${run_dir}/tns_hold.rpt"
 
-puts "\[INFO\] Saving final database..."
+set fp [open $hold_wns_file w]
+puts $fp "Hold WNS calculated from timing_hold.rpt by extract_features.py"
+close $fp
 
-write_db \
-    "${run_dir}/final.odb"
-
-if {![file exists "${run_dir}/final.odb"]} {
-    puts "\[ERROR\] final.odb was not created."
-    exit 1
-}
+set fp [open $hold_tns_file w]
+puts $fp "Hold TNS calculated from timing_hold.rpt by extract_features.py"
+close $fp
 
 # ----------------------------------------------------------------------
-# 26. Final verification
+# 22. Final file verification
 # ----------------------------------------------------------------------
 
 puts ""
@@ -649,11 +575,9 @@ foreach f [list \
     "${run_dir}/final.odb" \
     "${run_dir}/final.def" \
     "${run_dir}/route.guide" \
+    "${run_dir}/global_route_segments.txt" \
     "${run_dir}/congestion.rpt" \
-    "${run_dir}/wirelength_global.rpt" \
-    "${run_dir}/wirelength_detailed.rpt" \
-    "${run_dir}/wirelength_final.rpt" \
-    "${run_dir}/route_status_final.rpt" \
+    "${run_dir}/detailed_route_drc.rpt" \
     "${run_dir}/timing_setup.rpt" \
     "${run_dir}/timing_hold.rpt" \
     "${run_dir}/wns_setup.rpt" \
@@ -662,37 +586,55 @@ foreach f [list \
     "${run_dir}/tns_hold.rpt"] {
 
     if {[file exists $f]} {
-        set size [file size $f]
+
+        set size \
+            [file size $f]
 
         puts "\[OK\] $f ($size bytes)"
+
     } else {
+
         puts "\[WARNING\] Missing: $f"
     }
 }
 
 # ----------------------------------------------------------------------
-# 27. Final summary
+# 23. Final summary
 # ----------------------------------------------------------------------
 
 puts ""
 puts "=============================================="
 puts "OPENROAD FLOW COMPLETED"
 puts "=============================================="
+
 puts "Run tag: $RUN_TAG"
 puts ""
+
 puts "Generated:"
 puts "  final.odb"
 puts "  final.def"
 puts "  route.guide"
+puts "  global_route_segments.txt"
 puts "  congestion.rpt"
-puts "  wirelength_global.rpt"
-puts "  wirelength_detailed.rpt"
-puts "  wirelength_final.rpt"
-puts "  route_status_final.rpt"
+puts "  detailed_route_drc.rpt"
 puts "  timing_setup.rpt"
 puts "  timing_hold.rpt"
 puts "  wns_setup.rpt"
 puts "  tns_setup.rpt"
 puts "  wns_hold.rpt"
 puts "  tns_hold.rpt"
+
+puts ""
+puts "Routing metrics:"
+puts "  Wirelength : calculated from final.def"
+puts "  Via count  : calculated from final.def"
+puts "  Congestion : extracted from congestion.rpt"
+
+puts ""
+puts "Timing metrics:"
+puts "  Setup WNS  : extracted from wns_setup.rpt"
+puts "  Setup TNS  : extracted from tns_setup.rpt"
+puts "  Hold WNS   : calculated from timing_hold.rpt"
+puts "  Hold TNS   : calculated from timing_hold.rpt"
+
 puts "=============================================="

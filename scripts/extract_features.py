@@ -27,6 +27,7 @@ TNS_SETUP = RUN_DIR / "tns_setup.rpt"
 
 CONGESTION = RUN_DIR / "congestion.rpt"
 GLOBAL_ROUTE_REPORT = RUN_DIR / "global_route.rpt"
+OPENROAD_LOG = RUN_DIR / "openroad_log.txt"
 
 # ================================================================
 # BASIC HELPERS
@@ -587,84 +588,199 @@ def calculate_estimated_wirelength(def_data):
 
 def extract_congestion():
     """
-    Extract a scalar congestion metric from the OpenROAD
-    global-route final congestion summary.
+    Extract a scalar congestion metric.
 
-    Primary metric:
-        Total routing usage percentage.
+    Priority:
+        1. Numeric congestion value from global_route.rpt
+        2. Numeric congestion value from congestion.rpt
+        3. Explicit zero-overflow statement from global_route.rpt
+        4. Explicit zero-overflow statement from openroad_log.txt
 
-    Secondary fallback:
-        Maximum layer usage percentage.
+    IMPORTANT:
+        An empty congestion.rpt by itself does NOT mean congestion = 0.
 
-    A design with zero routing overflow is valid and returns
-    a real congestion value rather than None.
+        It is converted to 0.0 only when another routing artifact
+        explicitly confirms that no routing overflow / overflowing
+        GCells were reported.
+
+    Metric interpretation:
+        congestion = routing overflow / congestion value.
+        Therefore a confirmed zero-overflow run is represented as 0.0.
     """
 
     # --------------------------------------------------------------
-    # First preference: global_route.rpt
+    # Helper: parse numeric congestion values
     # --------------------------------------------------------------
 
-    if GLOBAL_ROUTE_REPORT.exists() and GLOBAL_ROUTE_REPORT.stat().st_size > 0:
+    def parse_percentage(text):
+        """
+        Look for percentage values associated with congestion,
+        overflow, usage, or routing.
+
+        Returns the most appropriate numeric value or None.
+        """
+
+        if not text:
+            return None
+
+        # ----------------------------------------------------------
+        # 1. Total row
+        #
+        # Example:
+        # Total  ...  85.4% ...
+        # ----------------------------------------------------------
+
+        total_pattern = re.compile(
+            r"^\s*Total\b.*?"
+            r"([-+]?\d+(?:\.\d+)?)\s*%",
+            re.IGNORECASE | re.MULTILINE
+        )
+
+        match = total_pattern.search(text)
+
+        if match:
+            try:
+                value = float(match.group(1))
+
+                if math.isfinite(value) and 0.0 <= value <= 1000.0:
+                    return round(value, 6)
+
+            except Exception:
+                pass
+
+        # ----------------------------------------------------------
+        # 2. Explicit congestion percentage
+        # ----------------------------------------------------------
+
+        congestion_patterns = [
+
+            r"(?:congestion|overflow)"
+            r"[^\n]{0,100}?"
+            r"([-+]?\d+(?:\.\d+)?)\s*%",
+
+            r"([-+]?\d+(?:\.\d+)?)\s*%"
+            r"[^\n]{0,100}?"
+            r"(?:congestion|overflow)",
+
+        ]
+
+        for pattern in congestion_patterns:
+
+            match = re.search(
+                pattern,
+                text,
+                re.IGNORECASE
+            )
+
+            if match:
+
+                try:
+
+                    value = float(
+                        match.group(1)
+                    )
+
+                    if (
+                        math.isfinite(value)
+                        and 0.0 <= value <= 1000.0
+                    ):
+                        return round(
+                            value,
+                            6
+                        )
+
+                except Exception:
+                    pass
+
+        return None
+
+    # --------------------------------------------------------------
+    # 1. global_route.rpt
+    # --------------------------------------------------------------
+
+    if GLOBAL_ROUTE_REPORT.exists():
 
         try:
+
             text = GLOBAL_ROUTE_REPORT.read_text(
                 errors="ignore"
             )
 
-            # ------------------------------------------------------
-            # Look for the Total row of:
-            #
-            # Total  Resource Demand Usage(%) MaxH / MaxV / Overflow
-            # ------------------------------------------------------
+            if text.strip():
 
-            total_pattern = re.compile(
-                r"^\s*Total\s+"
-                r"[-+]?\d+(?:\.\d+)?\s+"
-                r"[-+]?\d+(?:\.\d+)?\s+"
-                r"([-+]?\d+(?:\.\d+)?)%"
-                r"\s+"
-                r"[-+]?\d+(?:\.\d+)?\s*/\s*"
-                r"[-+]?\d+(?:\.\d+)?\s*/\s*"
-                r"[-+]?\d+(?:\.\d+)?",
-                re.IGNORECASE | re.MULTILINE
-            )
+                # --------------------------------------------------
+                # First try numeric congestion information.
+                # --------------------------------------------------
 
-            match = total_pattern.search(text)
+                value = parse_percentage(text)
 
-            if match:
-                return round(float(match.group(1)), 6)
+                if value is not None:
 
-            # ------------------------------------------------------
-            # More tolerant Total-row parser
-            # ------------------------------------------------------
-
-            for line in text.splitlines():
-
-                if not re.match(r"^\s*Total\b", line, re.IGNORECASE):
-                    continue
-
-                usage_match = re.search(
-                    r"([-+]?\d+(?:\.\d+)?)\s*%",
-                    line
-                )
-
-                if usage_match:
-                    return round(
-                        float(usage_match.group(1)),
-                        6
+                    print(
+                        "[INFO] Congestion extracted from "
+                        "global_route.rpt: "
+                        f"{value}"
                     )
+
+                    return value
+
+                # --------------------------------------------------
+                # IMPORTANT:
+                # Your TCL creates global_route.rpt with this
+                # message when congestion.rpt is absent because
+                # there were no overflowing GCells.
+                # --------------------------------------------------
+
+                zero_overflow_patterns = [
+
+                    r"no\s+overflowing\s+gcell",
+
+                    r"no\s+overflowing\s+gcells",
+
+                    r"no\s+overflow",
+
+                    r"zero\s+overflow",
+
+                    r"overflow\s*[:=]\s*0(?:\.0+)?",
+
+                    r"total\s+overflow\s*[:=]\s*0(?:\.0+)?",
+
+                    r"routing\s+overflow\s*[:=]\s*0(?:\.0+)?",
+
+                ]
+
+                for pattern in zero_overflow_patterns:
+
+                    if re.search(
+                        pattern,
+                        text,
+                        re.IGNORECASE
+                    ):
+
+                        print(
+                            "[INFO] Global routing report "
+                            "explicitly confirms zero "
+                            "routing overflow."
+                        )
+
+                        print(
+                            "[INFO] Congestion set to 0.0"
+                        )
+
+                        return 0.0
 
         except Exception as exc:
 
             print(
-                f"[WARNING] Failed to parse global_route.rpt: {exc}"
+                "[WARNING] Failed to parse "
+                f"global_route.rpt: {exc}"
             )
 
     # --------------------------------------------------------------
-    # Second preference: congestion.rpt
+    # 2. congestion.rpt
     # --------------------------------------------------------------
 
-    if CONGESTION.exists() and CONGESTION.stat().st_size > 0:
+    if CONGESTION.exists():
 
         try:
 
@@ -672,35 +788,155 @@ def extract_congestion():
                 errors="ignore"
             )
 
-            percentages = []
+            if text.strip():
 
-            for match in re.finditer(
-                r"([-+]?\d+(?:\.\d+)?)\s*%",
-                text
-            ):
+                value = parse_percentage(text)
 
-                value = float(match.group(1))
+                if value is not None:
 
-                if 0.0 <= value <= 1000.0:
-                    percentages.append(value)
+                    print(
+                        "[INFO] Congestion extracted from "
+                        "congestion.rpt: "
+                        f"{value}"
+                    )
 
-            if percentages:
-                return round(
-                    max(percentages),
-                    6
-                )
+                    return value
+
+                # --------------------------------------------------
+                # Look for explicit zero overflow without '%'.
+                # --------------------------------------------------
+
+                zero_overflow_patterns = [
+
+                    r"overflow\s*[:=]\s*0(?:\.0+)?\b",
+
+                    r"total\s+overflow\s*[:=]\s*0(?:\.0+)?\b",
+
+                    r"routing\s+overflow\s*[:=]\s*0(?:\.0+)?\b",
+
+                    r"no\s+overflow",
+
+                    r"no\s+overflowing\s+gcell",
+
+                    r"no\s+overflowing\s+gcells",
+
+                ]
+
+                for pattern in zero_overflow_patterns:
+
+                    if re.search(
+                        pattern,
+                        text,
+                        re.IGNORECASE
+                    ):
+
+                        print(
+                            "[INFO] congestion.rpt "
+                            "explicitly confirms zero "
+                            "routing overflow."
+                        )
+
+                        return 0.0
 
         except Exception as exc:
 
             print(
-                f"[WARNING] Failed to parse congestion.rpt: {exc}"
+                "[WARNING] Failed to parse "
+                f"congestion.rpt: {exc}"
             )
 
     # --------------------------------------------------------------
-    # No usable congestion information
+    # 3. OpenROAD log fallback
     # --------------------------------------------------------------
 
+    if OPENROAD_LOG.exists():
+
+        try:
+
+            text = OPENROAD_LOG.read_text(
+                errors="ignore"
+            )
+
+            if text.strip():
+
+                # --------------------------------------------------
+                # First look for explicit numeric congestion.
+                # --------------------------------------------------
+
+                value = parse_percentage(text)
+
+                if value is not None:
+
+                    print(
+                        "[INFO] Congestion extracted from "
+                        "openroad_log.txt: "
+                        f"{value}"
+                    )
+
+                    return value
+
+                # --------------------------------------------------
+                # Then look for explicit zero-overflow evidence.
+                # --------------------------------------------------
+
+                zero_overflow_patterns = [
+
+                    r"no\s+overflowing\s+gcell",
+
+                    r"no\s+overflowing\s+gcells",
+
+                    r"no\s+routing\s+overflow",
+
+                    r"routing\s+overflow\s*[:=]\s*0(?:\.0+)?",
+
+                    r"total\s+overflow\s*[:=]\s*0(?:\.0+)?",
+
+                    r"\boverflow\s*[:=]\s*0(?:\.0+)?\b",
+
+                    r"\boverflow\s*=\s*0(?:\.0+)?\b",
+
+                ]
+
+                for pattern in zero_overflow_patterns:
+
+                    if re.search(
+                        pattern,
+                        text,
+                        re.IGNORECASE
+                    ):
+
+                        print(
+                            "[INFO] OpenROAD log "
+                            "confirms zero routing overflow."
+                        )
+
+                        print(
+                            "[INFO] Congestion set to 0.0"
+                        )
+
+                        return 0.0
+
+        except Exception as exc:
+
+            print(
+                "[WARNING] Failed to parse "
+                f"openroad_log.txt: {exc}"
+            )
+
+    # --------------------------------------------------------------
+    # 4. No reliable congestion information
+    # --------------------------------------------------------------
+
+    print(
+        "[WARNING] No reliable congestion information found."
+    )
+
+    print(
+        "[WARNING] congestion remains None."
+    )
+
     return None
+
 # ================================================================
 # TIMING SCALAR REPORT
 # ================================================================

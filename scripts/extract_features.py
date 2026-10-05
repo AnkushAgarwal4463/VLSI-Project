@@ -40,6 +40,7 @@ WIRELENGTH_DETAILED = RUN_DIR / "wirelength_detailed.rpt"
 def safe_float(value):
 
     try:
+
         value = float(value)
 
         if math.isfinite(value):
@@ -57,9 +58,13 @@ def read_text(path):
         return ""
 
     try:
-        return path.read_text(errors="ignore")
+
+        return path.read_text(
+            errors="ignore"
+        )
 
     except Exception:
+
         return ""
 
 
@@ -91,6 +96,7 @@ def extract_first_number(text):
 def get_environment_features():
 
     return {
+
         "run_tag": RUN_TAG,
 
         "array_size": int(
@@ -137,14 +143,14 @@ def parse_def(def_file):
 
         "core_area_um2": None,
 
+        "dbu_per_micron": 1000,
+
         "num_cells": 0,
 
         "num_nets": 0,
 
-        # Top-level IO pins only.
         "num_pins": 0,
 
-        # Actual instance-net connections.
         "num_instance_pins": 0,
 
         "num_registers": 0,
@@ -155,23 +161,44 @@ def parse_def(def_file):
 
         "nets": {},
 
-        # DEF-declared via names.
         "via_names": set(),
     }
 
     if not text:
+
         return result
+
+    # ============================================================
+    # DEF DATABASE UNITS
+    # ============================================================
+
+    dbu_match = re.search(
+        r"UNITS\s+DISTANCE\s+MICRONS\s+(\d+)",
+        text,
+        re.I
+    )
+
+    if dbu_match:
+
+        result[
+            "dbu_per_micron"
+        ] = int(
+            dbu_match.group(1)
+        )
 
     # ============================================================
     # DIE AREA
     # ============================================================
 
     m = re.search(
+
         r"DIEAREA\s*"
         r"\(\s*(-?\d+)\s+(-?\d+)\s*\)"
         r"\s*"
         r"\(\s*(-?\d+)\s+(-?\d+)\s*\)",
+
         text,
+
         re.S | re.I
     )
 
@@ -182,30 +209,38 @@ def parse_def(def_file):
             m.groups()
         )
 
-        # SKY130 DEF database units.
-        dbu = 1000.0
-
-        width = abs(
-            x1 - x0
-        ) / dbu
-
-        height = abs(
-            y1 - y0
-        ) / dbu
-
-        result["die_area_um2"] = (
-            width * height
+        dbu = float(
+            result[
+                "dbu_per_micron"
+            ]
         )
+
+        width = (
+            abs(x1 - x0)
+            / dbu
+        )
+
+        height = (
+            abs(y1 - y0)
+            / dbu
+        )
+
+        result[
+            "die_area_um2"
+        ] = width * height
 
     # ============================================================
     # COMPONENTS
     # ============================================================
 
     comp_section = re.search(
+
         r"COMPONENTS\s+\d+\s*;"
         r"(.*?)"
         r"END COMPONENTS",
+
         text,
+
         re.S | re.I
     )
 
@@ -216,6 +251,7 @@ def parse_def(def_file):
         )
 
         block_pattern = re.compile(
+
             r"(?ms)"
             r"^\s*-\s+(\S+)\s+(\S+)"
             r"(.*?)"
@@ -233,13 +269,17 @@ def parse_def(def_file):
             body = match.group(3)
 
             placed = re.search(
+
                 r"\+\s+(?:PLACED|FIXED)\s+"
                 r"\(\s*(-?\d+)\s+(-?\d+)\s*\)",
+
                 body,
+
                 re.I
             )
 
             if not placed:
+
                 continue
 
             x = int(
@@ -250,7 +290,9 @@ def parse_def(def_file):
                 placed.group(2)
             )
 
-            result["components"][inst] = {
+            result[
+                "components"
+            ][inst] = {
 
                 "master": master,
 
@@ -259,7 +301,9 @@ def parse_def(def_file):
                 "y": y,
             }
 
-    result["num_cells"] = len(
+    result[
+        "num_cells"
+    ] = len(
         result["components"]
     )
 
@@ -276,8 +320,11 @@ def parse_def(def_file):
         ].lower()
 
         if re.search(
+
             r"(dff|dfr|dfb|dfx|dlr|dlh|latch)",
+
             master,
+
             re.I
         ):
 
@@ -286,8 +333,11 @@ def parse_def(def_file):
             ] += 1
 
         if re.search(
+
             r"(^|_)buf|buf",
+
             master,
+
             re.I
         ):
 
@@ -296,31 +346,41 @@ def parse_def(def_file):
             ] += 1
 
     # ============================================================
-    # VIA DECLARATIONS
+    # EXPLICIT DEF VIA DECLARATIONS
     # ============================================================
 
     via_section = re.search(
+
         r"VIAS\s+\d+\s*;"
         r"(.*?)"
         r"END VIAS",
+
         text,
+
         re.S | re.I
     )
 
     if via_section:
 
-        via_text = via_section.group(1)
+        via_text = (
+            via_section.group(1)
+        )
 
         via_matches = re.findall(
+
             r"^\s*-\s+(\S+)",
+
             via_text,
+
             re.M
         )
 
         result[
             "via_names"
         ] = set(
+
             v.lower()
+
             for v in via_matches
         )
 
@@ -329,10 +389,13 @@ def parse_def(def_file):
     # ============================================================
 
     nets_section = re.search(
+
         r"NETS\s+\d+\s*;"
         r"(.*?)"
         r"END NETS",
+
         text,
+
         re.S | re.I
     )
 
@@ -343,6 +406,7 @@ def parse_def(def_file):
         )
 
         net_pattern = re.compile(
+
             r"(?ms)"
             r"^\s*-\s+(\S+)"
             r"(.*?)"
@@ -365,7 +429,9 @@ def parse_def(def_file):
                 "nets"
             ][net_name] = body
 
-    result["num_nets"] = len(
+    result[
+        "num_nets"
+    ] = len(
         result["nets"]
     )
 
@@ -374,18 +440,24 @@ def parse_def(def_file):
     # ============================================================
 
     pin_section = re.search(
+
         r"PINS\s+\d+\s*;"
         r"(.*?)"
         r"END PINS",
+
         text,
+
         re.S | re.I
     )
 
     if pin_section:
 
         pin_matches = re.findall(
+
             r"^\s*-\s+\S+",
+
             pin_section.group(1),
+
             re.M
         )
 
@@ -396,12 +468,13 @@ def parse_def(def_file):
         )
 
     # ============================================================
-    # ACTUAL INSTANCE PIN CONNECTIONS
+    # INSTANCE PIN CONNECTIONS
     # ============================================================
 
     total_instance_connections = 0
 
     connection_pattern = re.compile(
+
         r"\(\s*(\S+)\s+(\S+)\s*\)"
     )
 
@@ -432,7 +505,9 @@ def parse_def(def_file):
 # NET CLASSIFICATION
 # ================================================================
 
-def is_power_ground_net(net_name):
+def is_power_ground_net(
+    net_name
+):
 
     name = net_name.upper()
 
@@ -482,11 +557,15 @@ def is_clock_net(
     for keyword in clock_keywords:
 
         if keyword in name:
+
             return True
 
     if re.search(
+
         r"\b(clock|clk)\b",
+
         body,
+
         re.I
     ):
 
@@ -515,21 +594,28 @@ def is_reset_net(
     for keyword in reset_keywords:
 
         if (
+
             name == keyword
+
             or name.startswith(
                 keyword + "_"
             )
+
             or name.endswith(
                 "_" + keyword
             )
+
             or keyword in name
         ):
 
             return True
 
     if re.search(
+
         r"\b(reset|rst)\b",
+
         body,
+
         re.I
     ):
 
@@ -544,6 +630,7 @@ def get_signal_connections(
 ):
 
     connection_pattern = re.compile(
+
         r"\(\s*(\S+)\s+(\S+)\s*\)"
     )
 
@@ -557,12 +644,12 @@ def get_signal_connections(
 
         if inst in components:
 
-            connections.append(
-                {
-                    "inst": inst,
-                    "pin": pin,
-                }
-            )
+            connections.append({
+
+                "inst": inst,
+
+                "pin": pin,
+            })
 
     return connections
 
@@ -598,51 +685,48 @@ def calculate_component_features(
         }
 
     xs = [
+
         c["x"]
+
         for c in components.values()
     ]
 
     ys = [
+
         c["y"]
+
         for c in components.values()
     ]
 
+    dbu = float(
+        def_data[
+            "dbu_per_micron"
+        ]
+    )
+
     x_spread = (
+
         max(xs) - min(xs)
-    ) / 1000.0
+
+    ) / dbu
 
     y_spread = (
+
         max(ys) - min(ys)
-    ) / 1000.0
+
+    ) / dbu
 
     # ============================================================
-    # LOCAL PLACEMENT DENSITY
-    #
-    # This is a placement-distribution feature.
-    #
-    # The component coordinates are divided into a 10x10 grid.
-    # Local density is normalized relative to the average number
-    # of components per bin and then scaled to the requested
-    # global utilization.
-    #
-    # Therefore:
-    #
-    #     mean_density ~= requested_utilization
-    #
-    # This is NOT the same as true physical cell-area density.
-    # A true area-based density requires LEF/ODB cell dimensions.
+    # 10 x 10 PLACEMENT DISTRIBUTION
     # ============================================================
 
     nx = 10
-
     ny = 10
 
     xmin = min(xs)
-
     xmax = max(xs)
 
     ymin = min(ys)
-
     ymax = max(ys)
 
     xrange = max(
@@ -668,17 +752,21 @@ def calculate_component_features(
     for c in components.values():
 
         gx = int(
+
             (
                 c["x"] - xmin
             )
+
             / xrange
             * nx
         )
 
         gy = int(
+
             (
                 c["y"] - ymin
             )
+
             / yrange
             * ny
         )
@@ -705,6 +793,7 @@ def calculate_component_features(
     ]
 
     mean_count = (
+
         sum(counts)
         / len(counts)
     )
@@ -712,7 +801,9 @@ def calculate_component_features(
     if mean_count <= 0:
 
         densities = [
+
             0.0
+
             for _ in counts
         ]
 
@@ -730,6 +821,7 @@ def calculate_component_features(
         ]
 
     mean_density = (
+
         sum(densities)
         / len(densities)
     )
@@ -743,7 +835,6 @@ def calculate_component_features(
             ) ** 2
 
             for d in densities
-
         )
 
         / len(densities)
@@ -807,9 +898,7 @@ def calculate_fanout_features(
     fanouts = []
 
     excluded_clock = 0
-
     excluded_reset = 0
-
     excluded_power = 0
 
     for net_name, body in nets.items():
@@ -822,7 +911,6 @@ def calculate_fanout_features(
 
             continue
 
-        # Exclude global clock distribution.
         if is_clock_net(
             net_name,
             body
@@ -832,8 +920,6 @@ def calculate_fanout_features(
 
             continue
 
-        # Exclude reset distribution from
-        # ordinary datapath fanout.
         if is_reset_net(
             net_name,
             body
@@ -851,14 +937,15 @@ def calculate_fanout_features(
         )
 
         if len(connections) < 2:
+
             continue
 
-        # One connection is treated as the driver.
         sink_count = (
             len(connections) - 1
         )
 
         if sink_count < 1:
+
             continue
 
         fanouts.append(
@@ -870,15 +957,18 @@ def calculate_fanout_features(
     )
 
     print(
-        f"       power/ground = {excluded_power}"
+        f"       power/ground = "
+        f"{excluded_power}"
     )
 
     print(
-        f"       clock        = {excluded_clock}"
+        f"       clock        = "
+        f"{excluded_clock}"
     )
 
     print(
-        f"       reset        = {excluded_reset}"
+        f"       reset        = "
+        f"{excluded_reset}"
     )
 
     if not fanouts:
@@ -934,13 +1024,8 @@ def calculate_pin_density(
 
         return None
 
-    # ------------------------------------------------------------
-    # Unit:
-    #
-    #     instance pins / 10,000 um^2
-    # ------------------------------------------------------------
-
     value = (
+
         instance_pins
         / die_area
         * 1e4
@@ -951,15 +1036,18 @@ def calculate_pin_density(
     )
 
     print(
-        f"       die area       = {die_area:.6f} um^2"
+        f"       die area       = "
+        f"{die_area:.6f} um^2"
     )
 
     print(
-        f"       instance pins  = {instance_pins}"
+        f"       instance pins  = "
+        f"{instance_pins}"
     )
 
     print(
-        f"       pin density    = {value:.6f} pins/10k um^2"
+        f"       pin density    = "
+        f"{value:.6f} pins/10k um^2"
     )
 
     return round(
@@ -979,11 +1067,8 @@ def extract_wirelength_from_report(
     text = read_text(path)
 
     if not text.strip():
-        return None
 
-    # ============================================================
-    # Common OpenROAD report formats.
-    # ============================================================
+        return None
 
     patterns = [
 
@@ -1000,13 +1085,24 @@ def extract_wirelength_from_report(
 
         r"\bHPWL\b\s*[:=]\s*"
         r"([-+]?\d+(?:\.\d+)?)",
+
+        r"\btotal\s+wirelength\b"
+        r"\s+"
+        r"([-+]?(?:\d+(?:\.\d*)?|\.\d+))",
+
+        r"\bwirelength\b"
+        r"\s+"
+        r"([-+]?(?:\d+(?:\.\d*)?|\.\d+))",
     ]
 
     for pattern in patterns:
 
         match = re.search(
+
             pattern,
+
             text,
+
             re.I
         )
 
@@ -1017,11 +1113,14 @@ def extract_wirelength_from_report(
             )
 
             if (
+
                 value is not None
+
                 and value > 0
             ):
 
                 print(
+
                     "[INFO] Wirelength extracted "
                     f"from {path.name}: {value}"
                 )
@@ -1032,7 +1131,7 @@ def extract_wirelength_from_report(
                 )
 
     # ============================================================
-    # Search lines containing wirelength-related terms.
+    # Line-based fallback
     # ============================================================
 
     for line in text.splitlines():
@@ -1040,8 +1139,11 @@ def extract_wirelength_from_report(
         lower = line.lower()
 
         if not any(
+
             word in lower
+
             for word in [
+
                 "wirelength",
                 "wire length",
                 "total wire",
@@ -1059,6 +1161,7 @@ def extract_wirelength_from_report(
         )
 
         if not numbers:
+
             continue
 
         for value_text in reversed(
@@ -1070,11 +1173,14 @@ def extract_wirelength_from_report(
             )
 
             if (
+
                 value is not None
+
                 and value > 0
             ):
 
                 print(
+
                     "[INFO] Wirelength extracted "
                     f"from {path.name}: {value}"
                 )
@@ -1088,6 +1194,190 @@ def extract_wirelength_from_report(
 
 
 # ================================================================
+# ROUTING GEOMETRY HELPERS
+# ================================================================
+
+def resolve_def_points(
+    route_text
+):
+    """
+    Resolve OpenROAD DEF route coordinates.
+
+    Examples:
+
+        ( 68770 101830 )
+        ( 69690 * )
+
+    means:
+
+        (68770,101830)
+        (69690,101830)
+
+    Likewise:
+
+        ( 68770 101830 )
+        ( * 103870 )
+
+    means:
+
+        (68770,101830)
+        (68770,103870)
+
+    Returns a list of resolved (x,y) points.
+    """
+
+    coordinate_pattern = re.compile(
+
+        r"\(\s*"
+        r"(-?\d+|\*)"
+        r"\s+"
+        r"(-?\d+|\*)"
+        r"\s*\)"
+    )
+
+    raw_points = (
+        coordinate_pattern.findall(
+            route_text
+        )
+    )
+
+    if not raw_points:
+
+        return []
+
+    points = []
+
+    previous_x = None
+    previous_y = None
+
+    for raw_x, raw_y in raw_points:
+
+        # --------------------------------------------------------
+        # Resolve X
+        # --------------------------------------------------------
+
+        if raw_x == "*":
+
+            if previous_x is None:
+
+                continue
+
+            x = previous_x
+
+        else:
+
+            x = int(raw_x)
+
+        # --------------------------------------------------------
+        # Resolve Y
+        # --------------------------------------------------------
+
+        if raw_y == "*":
+
+            if previous_y is None:
+
+                continue
+
+            y = previous_y
+
+        else:
+
+            y = int(raw_y)
+
+        points.append(
+            (
+                x,
+                y
+            )
+        )
+
+        previous_x = x
+        previous_y = y
+
+    return points
+
+
+def is_inline_via_token(
+    token,
+    declared_vias
+):
+    """
+    Detect via names appearing inside routed DEF geometry.
+
+    First preference:
+        exact match against DEF VIAS declarations.
+
+    Fallback:
+        SKY130/OpenROAD inline via naming patterns such as:
+
+            L1M1_PR
+            L1M1_PR_MR
+            L2M2_PR
+            L2M2_PR_MR
+            VIA12
+            M2_M3
+            M2M3
+    """
+
+    lower = token.lower()
+
+    # ------------------------------------------------------------
+    # Exact DEF declaration
+    # ------------------------------------------------------------
+
+    if lower in declared_vias:
+
+        return True
+
+    # ------------------------------------------------------------
+    # Common explicit VIA names
+    # ------------------------------------------------------------
+
+    if re.fullmatch(
+        r"via\d*",
+        lower,
+        re.I
+    ):
+
+        return True
+
+    if re.fullmatch(
+        r"m\d+[_-]m\d+",
+        lower,
+        re.I
+    ):
+
+        return True
+
+    if re.fullmatch(
+        r"m\d+m\d+",
+        lower,
+        re.I
+    ):
+
+        return True
+
+    # ------------------------------------------------------------
+    # SKY130/OpenROAD generated via names.
+    #
+    # Example:
+    #     L1M1_PR
+    #     L1M1_PR_MR
+    # ------------------------------------------------------------
+
+    if re.fullmatch(
+        r"l\d+m\d+"
+        r"(?:_pr(?:_mr)?)?",
+        lower,
+        re.I
+    ):
+
+        return True
+
+    return False
+
+
+# ================================================================
 # ROUTED NET / DEF ROUTING PARSER
 # ================================================================
 
@@ -1095,6 +1385,22 @@ def calculate_routing_from_def(
     def_data,
     def_file
 ):
+    """
+    Extract actual routed geometry from final.def.
+
+    IMPORTANT:
+    This parser handles the actual OpenROAD DEF syntax observed
+    in the systolic-array flow, including '*'-based coordinates.
+
+    Example observed syntax:
+
+        ROUTED met1 ( 68770 101830 ) ( 69690 * )
+              NEW met1 ( 68770 101830 ) ( * 103870 )
+              NEW met1 ( 68770 103870 ) ( 69690 * )
+              NEW li1  ( 69690 103870 ) ( * 110330 )
+
+    '*' means reuse the previous coordinate in that dimension.
+    """
 
     text = read_text(
         def_file
@@ -1106,7 +1412,7 @@ def calculate_routing_from_def(
 
         "via_count": None,
 
-        "routed_net_count": None,
+        "routed_net_count": 0,
 
         "route_segment_count": 0,
 
@@ -1115,17 +1421,37 @@ def calculate_routing_from_def(
 
     if not text:
 
+        print(
+            "[WARNING] final.def is empty or unavailable."
+        )
+
         return result
 
     # ============================================================
-    # NETS section
+    # DBU
+    # ============================================================
+
+    dbu_per_micron = int(
+
+        def_data.get(
+            "dbu_per_micron",
+            1000
+        )
+    )
+
+    if dbu_per_micron <= 0:
+
+        dbu_per_micron = 1000
+
+    # ============================================================
+    # NETS SECTION
     # ============================================================
 
     nets_section = re.search(
 
-        r"NETS\s+\d+\s*;"
+        r"\bNETS\s+\d+\s*;"
         r"(.*?)"
-        r"END NETS",
+        r"\bEND\s+NETS",
 
         text,
 
@@ -1144,40 +1470,8 @@ def calculate_routing_from_def(
         nets_section.group(1)
     )
 
-    print("")
-    print("=" * 70)
-    print("RAW DEF ROUTING DIAGNOSTIC")
-    print("=" * 70)
-    
-    route_hits = re.findall(
-        r"(?is)\b(?:ROUTED|FIXED)\b.*?;",
-        net_text
-    )
-    
-    print(
-        f"[DEBUG] ROUTED/FIXED statements found: "
-        f"{len(route_hits)}"
-    )
-    
-    if route_hits:
-    
-        print("")
-        print("[DEBUG] FIRST ROUTED/FIXED STATEMENT:")
-        print("-" * 70)
-        print(route_hits[0][:5000])
-        print("-" * 70)
-    
-    else:
-    
-        print(
-            "[WARNING] No ROUTED/FIXED statements found "
-            "inside NETS section."
-        )
-    
-    print("=" * 70)
-
     # ============================================================
-    # Individual NET blocks
+    # NET BLOCKS
     # ============================================================
 
     net_blocks = re.findall(
@@ -1190,13 +1484,91 @@ def calculate_routing_from_def(
         net_text
     )
 
+    print("")
     print(
-        f"[DEBUG] NETS section found: True"
+        "======================================================================"
+    )
+    print(
+        "RAW DEF ROUTING DIAGNOSTIC"
+    )
+    print(
+        "======================================================================"
+    )
+
+    route_hits = re.findall(
+
+        r"(?is)"
+        r"\b(?:ROUTED|FIXED)\b"
+        r".*?;",
+
+        net_text
     )
 
     print(
-        f"[DEBUG] Total NET blocks: {len(net_blocks)}"
+
+        "[DEBUG] ROUTED/FIXED statements found: "
+        f"{len(route_hits)}"
     )
+
+    if route_hits:
+
+        print("")
+        print(
+            "[DEBUG] FIRST ROUTED/FIXED STATEMENT:"
+        )
+
+        print(
+            "-" * 70
+        )
+
+        print(
+            route_hits[0][:5000]
+        )
+
+        print(
+            "-" * 70
+        )
+
+    else:
+
+        print(
+
+            "[WARNING] No ROUTED/FIXED statements "
+            "found inside NETS section."
+        )
+
+    print(
+        "=" * 70
+    )
+
+    print(
+        f"[DEBUG] Total NET blocks: "
+        f"{len(net_blocks)}"
+    )
+
+    # ============================================================
+    # DEF VIA NAMES
+    # ============================================================
+
+    declared_vias = set(
+
+        v.lower()
+
+        for v in def_data.get(
+            "via_names",
+            set()
+        )
+    )
+
+    print(
+
+        f"[INFO] Explicit DEF via declarations: "
+        f"{len(declared_vias)}"
+    )
+
+    # ============================================================
+    # Counters
+    # ============================================================
 
     routed_net_count = 0
 
@@ -1208,143 +1580,121 @@ def calculate_routing_from_def(
 
     routing_geometry_found = False
 
-    declared_vias = def_data[
-        "via_names"
-    ]
-
-    # ============================================================
-    # Coordinate parser
-    #
-    # DEF routing coordinates appear as:
-    #
-    #     (123 456)
-    #
-    # ============================================================
-
-    coordinate_pattern = re.compile(
-
-        r"\(\s*"
-        r"(-?\d+)"
-        r"\s+"
-        r"(-?\d+)"
-        r"\s*\)"
-    )
-
     debug_printed = False
 
     # ============================================================
-    # Process every net
+    # PROCESS NETS
     # ============================================================
 
     for block_index, block in enumerate(
         net_blocks
     ):
 
-        # --------------------------------------------------------
-        # Ignore nets without routed geometry.
-        # --------------------------------------------------------
+        route_match = re.search(
 
-        route_matches = list(
-            re.finditer(
+            r"\b(?:ROUTED|FIXED)\b"
+            r"(.*?);",
 
-                r"\b(?:ROUTED|FIXED)\b",
+            block,
 
-                block,
-
-                re.I
-            )
+            re.I | re.S
         )
 
-        if not route_matches:
+        if not route_match:
+
             continue
 
         routed_net_count += 1
 
-        # --------------------------------------------------------
-        # Only parse the first actual ROUTED/FIXED section.
-        # --------------------------------------------------------
+        route_text = route_match.group(0)
 
-        route_text = block[
-            route_matches[0].start():
-        ]
-
-        # --------------------------------------------------------
-        # Debug first routed net.
-        # --------------------------------------------------------
+        # ========================================================
+        # DEBUG FIRST ROUTED NET
+        # ========================================================
 
         if not debug_printed:
 
             net_name_match = re.match(
+
                 r"\s*-\s+(\S+)",
+
                 block
             )
 
-            net_name = (
+            if net_name_match:
 
-                net_name_match.group(1)
+                net_name = (
+                    net_name_match.group(1)
+                )
 
-                if net_name_match
+            else:
 
-                else "<unknown>"
+                net_name = "<unknown>"
+
+            print(
+                f"[DEBUG] First routed net: "
+                f"{net_name}"
             )
 
             print(
-                "[DEBUG] First routed net:"
-                f" {net_name}"
+                "[DEBUG] First routed net route text:"
             )
 
             print(
-                "[DEBUG] First routed net "
-                "route text:"
-            )
-
-            print(
-                route_text[:2000]
+                route_text[:5000]
             )
 
             debug_printed = True
 
         # ========================================================
-        # VIA COUNT
-        #
-        # Match against actual DEF-declared via names.
-        #
-        # Examples:
-        #
-        #     VIA12
-        #     M2_M3
-        #     VIA_M2_M3
+        # VIA DETECTION
         # ========================================================
 
-        if declared_vias:
+        # Remove coordinate pairs first.
+        route_without_coords = re.sub(
 
-            tokens = re.findall(
+            r"\(\s*"
+            r"(?:-?\d+|\*)"
+            r"\s+"
+            r"(?:-?\d+|\*)"
+            r"\s*\)",
 
-                r"[A-Za-z_]"
-                r"[A-Za-z0-9_.$/-]*",
+            " ",
 
-                route_text
-            )
+            route_text
+        )
 
-            for token in tokens:
+        # Remove route keywords and layer names.
+        tokens = re.findall(
 
-                if (
-                    token.lower()
-                    in declared_vias
-                ):
+            r"[A-Za-z_]"
+            r"[A-Za-z0-9_.$/-]*",
 
-                    via_count += 1
+            route_without_coords
+        )
+
+        for token in tokens:
+
+            if token.lower() in {
+                "routed",
+                "fixed",
+                "new",
+                "wire",
+                "rect",
+                "path",
+            }:
+
+                continue
+
+            if is_inline_via_token(
+                token,
+                declared_vias
+            ):
+
+                via_count += 1
 
         # ========================================================
-        # ROUTE SEGMENTS
-        #
-        # DEF syntax can contain:
-        #
-        # ROUTED met1 ...
-        #
-        # NEW met2 ...
-        #
-        # Each NEW begins another route path.
+        # ROUTE PATHS
         # ========================================================
 
         route_parts = re.split(
@@ -1356,70 +1706,65 @@ def calculate_routing_from_def(
             flags=re.I
         )
 
-        for part_index, part in enumerate(
-            route_parts
-        ):
+        for part in route_parts:
 
-            coords = [
+            part = part.strip()
 
-                (
-                    int(x),
-                    int(y)
-                )
+            if not part:
 
-                for x, y
-                in coordinate_pattern.findall(
-                    part
-                )
-            ]
+                continue
 
-            if len(coords) < 2:
+            points = resolve_def_points(
+                part
+            )
+
+            if len(points) < 2:
+
                 continue
 
             routing_geometry_found = True
 
-            # Number of physical point-to-point segments.
-            route_segment_count += (
-                len(coords) - 1
-            )
-
             # ----------------------------------------------------
-            # Manhattan route length.
+            # Point-to-point segments
             # ----------------------------------------------------
 
             for i in range(
                 1,
-                len(coords)
+                len(points)
             ):
 
-                x1, y1 = coords[
+                x1, y1 = points[
                     i - 1
                 ]
 
-                x2, y2 = coords[
+                x2, y2 = points[
                     i
                 ]
 
-                segment_length = (
+                length = (
 
                     abs(x2 - x1)
 
                     + abs(y2 - y1)
                 )
 
-                wirelength_dbu += (
-                    segment_length
-                )
+                if length <= 0:
+
+                    continue
+
+                wirelength_dbu += length
+
+                route_segment_count += 1
 
     # ============================================================
-    # Final routing diagnostics
+    # FINAL RESULTS
     # ============================================================
 
-    if routing_geometry_found:
-
-        result[
-            "routing_geometry_available"
-        ] = True
+    result[
+        "routed_net_count"
+    ] = int(
+        routed_net_count
+    )
 
     result[
         "route_segment_count"
@@ -1427,33 +1772,23 @@ def calculate_routing_from_def(
         route_segment_count
     )
 
-    if routed_net_count > 0:
-
-        result[
-            "routed_net_count"
-        ] = int(
-            routed_net_count
-        )
+    result[
+        "routing_geometry_available"
+    ] = bool(
+        routing_geometry_found
+    )
 
     if routing_geometry_found:
 
-        if wirelength_dbu > 0:
+        result[
+            "wirelength_um"
+        ] = round(
 
-            result[
-                "wirelength_um"
-            ] = round(
+            wirelength_dbu
+            / float(dbu_per_micron),
 
-                wirelength_dbu
-                / 1000.0,
-
-                6
-            )
-
-        # --------------------------------------------------------
-        # Via count is valid only if route geometry exists.
-        # Zero is therefore meaningful when the parser found
-        # actual routed geometry but no declared vias.
-        # --------------------------------------------------------
+            6
+        )
 
         result[
             "via_count"
@@ -1461,34 +1796,55 @@ def calculate_routing_from_def(
             via_count
         )
 
+    # ============================================================
+    # DIAGNOSTICS
+    # ============================================================
+
     print(
         "[INFO] DEF routing diagnostics:"
     )
 
     print(
+
         f"       routed nets       = "
         f"{result['routed_net_count']}"
     )
 
     print(
+
         f"       route segments    = "
         f"{result['route_segment_count']}"
     )
 
     print(
+
         f"       wirelength (um)   = "
         f"{result['wirelength_um']}"
     )
 
     print(
+
         f"       via count         = "
         f"{result['via_count']}"
     )
 
     print(
+
         f"       geometry found    = "
         f"{result['routing_geometry_available']}"
     )
+
+    if routing_geometry_found:
+
+        print(
+            "[OK] Actual DEF routing geometry extracted."
+        )
+
+    else:
+
+        print(
+            "[WARNING] No usable DEF routing geometry found."
+        )
 
     return result
 
@@ -1513,9 +1869,9 @@ def calculate_routing_features(
         "=============================================="
     )
 
-    # ------------------------------------------------------------
-    # First try OpenROAD wirelength reports.
-    # ------------------------------------------------------------
+    # ============================================================
+    # FIRST: AUTHORITATIVE OPENROAD REPORT
+    # ============================================================
 
     wirelength = (
         extract_wirelength_from_report(
@@ -1531,9 +1887,9 @@ def calculate_routing_features(
             "wirelength_final.rpt"
         )
 
-    # ------------------------------------------------------------
-    # Detailed routing report fallback.
-    # ------------------------------------------------------------
+    # ============================================================
+    # SECOND: DETAILED ROUTING REPORT
+    # ============================================================
 
     if wirelength is None:
 
@@ -1549,20 +1905,25 @@ def calculate_routing_features(
                 "wirelength_detailed.rpt"
             )
 
-    # ------------------------------------------------------------
-    # Always parse final.def.
-    # ------------------------------------------------------------
+    # ============================================================
+    # ALWAYS PARSE FINAL.DEF
+    #
+    # This is important because it provides:
+    #
+    #   routed_net_count
+    #   route_segment_count
+    #   via_count
+    #   routing geometry
+    # ============================================================
 
-    def_routing = (
-        calculate_routing_from_def(
-            def_data,
-            def_file
-        )
+    def_routing = calculate_routing_from_def(
+        def_data,
+        def_file
     )
 
-    # ------------------------------------------------------------
-    # Actual routed DEF geometry fallback.
-    # ------------------------------------------------------------
+    # ============================================================
+    # DEF ROUTED GEOMETRY FALLBACK
+    # ============================================================
 
     if wirelength is None:
 
@@ -1578,18 +1939,22 @@ def calculate_routing_features(
                 "final.def routed geometry"
             )
 
+    # ============================================================
+    # REPORT SOURCE
+    # ============================================================
+
     if wirelength_source:
 
         print(
-            "[OK] Authoritative wirelength "
-            f"source: {wirelength_source}"
+
+            "[OK] Authoritative wirelength source: "
+            f"{wirelength_source}"
         )
 
     else:
 
         print(
-            "[WARNING] No authoritative "
-            "wirelength found."
+            "[WARNING] No authoritative wirelength found."
         )
 
     return {
@@ -1635,6 +2000,7 @@ def calculate_estimated_wirelength(
     ]
 
     if not components:
+
         return None
 
     total_dbu = 0.0
@@ -1670,7 +2036,6 @@ def calculate_estimated_wirelength(
                 ref in components
 
                 and ref not in seen
-
             ):
 
                 c = components[
@@ -1678,6 +2043,7 @@ def calculate_estimated_wirelength(
                 ]
 
                 points.append(
+
                     (
                         c["x"],
                         c["y"]
@@ -1687,32 +2053,50 @@ def calculate_estimated_wirelength(
                 seen.add(ref)
 
         if len(points) < 2:
+
             continue
 
         xs = [
+
             p[0]
+
             for p in points
         ]
 
         ys = [
+
             p[1]
+
             for p in points
         ]
 
         total_dbu += (
-            max(xs) - min(xs)
+
+            max(xs)
+            - min(xs)
         )
 
         total_dbu += (
-            max(ys) - min(ys)
+
+            max(ys)
+            - min(ys)
         )
 
     if total_dbu <= 0:
+
         return None
+
+    dbu = float(
+
+        def_data.get(
+            "dbu_per_micron",
+            1000
+        )
+    )
 
     return round(
 
-        total_dbu / 1000.0,
+        total_dbu / dbu,
 
         6
     )
@@ -1729,11 +2113,8 @@ def extract_congestion():
     ):
 
         if not text:
-            return None
 
-        # --------------------------------------------------------
-        # Look only for routing-related lines.
-        # --------------------------------------------------------
+            return None
 
         routing_keywords = (
 
@@ -1754,9 +2135,7 @@ def extract_congestion():
 
                 keyword in lower
 
-                for keyword
-                in routing_keywords
-
+                for keyword in routing_keywords
             ):
 
                 continue
@@ -1774,11 +2153,12 @@ def extract_congestion():
 
                 value = safe_float(
 
-                    value_text.replace(
+                    value_text
+                    .replace(
                         "%",
                         ""
-                    ).strip()
-
+                    )
+                    .strip()
                 )
 
                 if (
@@ -1786,17 +2166,12 @@ def extract_congestion():
                     value is not None
 
                     and 0.0 <= value <= 1000.0
-
                 ):
 
                     return round(
                         value,
                         6
                     )
-
-        # --------------------------------------------------------
-        # Total row.
-        # --------------------------------------------------------
 
         match = re.search(
 
@@ -1821,7 +2196,6 @@ def extract_congestion():
                 value is not None
 
                 and 0 <= value <= 1000
-
             ):
 
                 return round(
@@ -1836,6 +2210,7 @@ def extract_congestion():
     ):
 
         if not text:
+
             return False
 
         patterns = [
@@ -1867,7 +2242,7 @@ def extract_congestion():
         )
 
     # ============================================================
-    # 1. global_route.rpt
+    # global_route.rpt
     # ============================================================
 
     text = read_text(
@@ -1881,6 +2256,7 @@ def extract_congestion():
     if value is not None:
 
         print(
+
             "[INFO] Congestion extracted "
             f"from global_route.rpt: {value}"
         )
@@ -1899,7 +2275,7 @@ def extract_congestion():
         return 0.0
 
     # ============================================================
-    # 2. congestion.rpt
+    # congestion.rpt
     # ============================================================
 
     text = read_text(
@@ -1913,6 +2289,7 @@ def extract_congestion():
     if value is not None:
 
         print(
+
             "[INFO] Congestion extracted "
             f"from congestion.rpt: {value}"
         )
@@ -1931,7 +2308,7 @@ def extract_congestion():
         return 0.0
 
     # ============================================================
-    # 3. OpenROAD log
+    # OPENROAD LOG
     # ============================================================
 
     text = read_text(
@@ -1945,6 +2322,7 @@ def extract_congestion():
     if value is not None:
 
         print(
+
             "[INFO] Congestion extracted "
             "from routing lines in "
             f"openroad_log.txt: {value}"
@@ -1964,8 +2342,7 @@ def extract_congestion():
         return 0.0
 
     print(
-        "[WARNING] No reliable congestion "
-        "information found."
+        "[WARNING] No reliable congestion information found."
     )
 
     return None
@@ -1985,6 +2362,7 @@ def extract_scalar_report(
     )
 
     if not text.strip():
+
         return None
 
     pattern = (
@@ -1998,12 +2376,16 @@ def extract_scalar_report(
     )
 
     match = re.search(
+
         pattern,
+
         text,
+
         re.I
     )
 
     if not match:
+
         return None
 
     return safe_float(
@@ -2033,10 +2415,11 @@ def parse_timing_report():
     }
 
     if not text.strip():
+
         return result
 
     # ============================================================
-    # Slack values
+    # SLACK
     # ============================================================
 
     slack_values = []
@@ -2077,11 +2460,14 @@ def parse_timing_report():
                     )
 
             if slack_values:
+
                 break
 
     if slack_values:
 
-        result["WNS"] = round(
+        result[
+            "WNS"
+        ] = round(
 
             min(slack_values),
 
@@ -2092,23 +2478,26 @@ def parse_timing_report():
 
             value
 
-            for value
-            in slack_values
+            for value in slack_values
 
             if value < 0
         ]
 
-        result["TNS"] = round(
+        result[
+            "TNS"
+        ] = round(
 
             sum(negative)
+
             if negative
+
             else 0.0,
 
             6
         )
 
     # ============================================================
-    # Find worst timing path.
+    # WORST TIMING PATH
     # ============================================================
 
     path_blocks = re.split(
@@ -2149,6 +2538,7 @@ def parse_timing_report():
         )
 
         if not matches:
+
             continue
 
         slack = safe_float(
@@ -2156,6 +2546,7 @@ def parse_timing_report():
         )
 
         if slack is None:
+
             continue
 
         if (
@@ -2163,7 +2554,6 @@ def parse_timing_report():
             worst_slack is None
 
             or slack < worst_slack
-
         ):
 
             worst_slack = slack
@@ -2171,10 +2561,11 @@ def parse_timing_report():
             worst_block = block
 
     if worst_block is None:
+
         return result
 
     # ============================================================
-    # Extract path cell instances.
+    # TIMING CELLS
     # ============================================================
 
     cell_pattern = re.compile(
@@ -2203,7 +2594,7 @@ def parse_timing_report():
         })
 
     # ============================================================
-    # Logic depth
+    # LOGIC DEPTH
     # ============================================================
 
     combinational_cells = []
@@ -2232,7 +2623,7 @@ def parse_timing_report():
         )
 
     # ============================================================
-    # Critical path physical distance
+    # CRITICAL PATH PHYSICAL DISTANCE
     # ============================================================
 
     def_data = parse_def(
@@ -2250,6 +2641,7 @@ def parse_timing_report():
         inst = cell["inst"]
 
         if inst not in components:
+
             continue
 
         c = components[
@@ -2269,7 +2661,9 @@ def parse_timing_report():
         distance_dbu = 0.0
 
         for i in range(
+
             1,
+
             len(path_points)
         ):
 
@@ -2288,11 +2682,19 @@ def parse_timing_report():
                 + abs(y2 - y1)
             )
 
+        dbu = float(
+
+            def_data.get(
+                "dbu_per_micron",
+                1000
+            )
+        )
+
         result[
             "crit_path_wirelength"
         ] = round(
 
-            distance_dbu / 1000.0,
+            distance_dbu / dbu,
 
             6
         )
@@ -2375,16 +2777,19 @@ def parse_hold_timing():
     )
 
     print(
+
         f"       slack values found = "
         f"{len(slack_values)}"
     )
 
     print(
+
         f"       hold WNS            = "
         f"{hold_wns}"
     )
 
     print(
+
         f"       hold TNS            = "
         f"{hold_tns}"
     )
@@ -2435,7 +2840,7 @@ def main():
     )
 
     # ============================================================
-    # Required files
+    # REQUIRED FILES
     # ============================================================
 
     if not FINAL_DEF.exists():
@@ -2455,7 +2860,7 @@ def main():
         raise SystemExit(1)
 
     # ============================================================
-    # Environment
+    # ENVIRONMENT
     # ============================================================
 
     env = get_environment_features()
@@ -2474,47 +2879,61 @@ def main():
     )
 
     print(
+
         f"[INFO] Cells          : "
         f"{def_data['num_cells']}"
     )
 
     print(
+
         f"[INFO] Nets           : "
         f"{def_data['num_nets']}"
     )
 
     print(
+
         f"[INFO] Top-level pins : "
         f"{def_data['num_pins']}"
     )
 
     print(
+
         f"[INFO] Instance pins  : "
         f"{def_data['num_instance_pins']}"
     )
 
     print(
+
         f"[INFO] Registers      : "
         f"{def_data['num_registers']}"
     )
 
     print(
+
         f"[INFO] Buffers        : "
         f"{def_data['num_buffers']}"
     )
 
     print(
+
         f"[INFO] Die area       : "
         f"{def_data['die_area_um2']}"
     )
 
     print(
+
+        f"[INFO] DEF DBU        : "
+        f"{def_data['dbu_per_micron']}"
+    )
+
+    print(
+
         f"[INFO] DEF via types  : "
         f"{len(def_data['via_names'])}"
     )
 
     # ============================================================
-    # Placement
+    # PLACEMENT
     # ============================================================
 
     placement = (
@@ -2525,7 +2944,7 @@ def main():
     )
 
     # ============================================================
-    # Fanout
+    # FANOUT
     # ============================================================
 
     fanout = (
@@ -2535,7 +2954,7 @@ def main():
     )
 
     # ============================================================
-    # Pin density
+    # PIN DENSITY
     # ============================================================
 
     pin_density = (
@@ -2545,7 +2964,7 @@ def main():
     )
 
     # ============================================================
-    # Routing
+    # ROUTING
     # ============================================================
 
     routing = (
@@ -2556,7 +2975,7 @@ def main():
     )
 
     # ============================================================
-    # Estimated wirelength
+    # ESTIMATED WIRELENGTH
     # ============================================================
 
     estimated_wirelength = (
@@ -2566,7 +2985,7 @@ def main():
     )
 
     # ============================================================
-    # Congestion
+    # CONGESTION
     # ============================================================
 
     congestion = (
@@ -2574,58 +2993,62 @@ def main():
     )
 
     # ============================================================
-    # Timing
+    # TIMING
     # ============================================================
 
     timing = parse_timing_report()
 
-    # ------------------------------------------------------------
-    # Authoritative WNS.
-    # ------------------------------------------------------------
+    # ============================================================
+    # AUTHORITATIVE WNS
+    # ============================================================
 
     setup_wns = extract_scalar_report(
+
         WNS_SETUP,
+
         "wns"
     )
 
     if setup_wns is not None:
 
-        timing["WNS"] = round(
+        timing[
+            "WNS"
+        ] = round(
             setup_wns,
             6
         )
 
-    # ------------------------------------------------------------
-    # Authoritative TNS.
-    # ------------------------------------------------------------
+    # ============================================================
+    # AUTHORITATIVE TNS
+    # ============================================================
 
     setup_tns = extract_scalar_report(
+
         TNS_SETUP,
+
         "tns"
     )
 
     if setup_tns is not None:
 
-        timing["TNS"] = round(
+        timing[
+            "TNS"
+        ] = round(
             setup_tns,
             6
         )
 
     # ============================================================
-    # Hold
+    # HOLD
     # ============================================================
 
     hold = parse_hold_timing()
 
     # ============================================================
-    # Construct features
+    # FEATURES
     # ============================================================
 
     features = {
-
-        # --------------------------------------------------------
-        # Environment
-        # --------------------------------------------------------
 
         "run_tag":
             RUN_TAG,
@@ -2636,42 +3059,58 @@ def main():
         "data_width":
             env["data_width"],
 
-        # --------------------------------------------------------
-        # CORE FEATURES
-        # --------------------------------------------------------
-
         "max_density":
-            placement["max_density"],
+            placement[
+                "max_density"
+            ],
 
         "mean_density":
-            placement["mean_density"],
+            placement[
+                "mean_density"
+            ],
 
         "std_density":
-            placement["std_density"],
+            placement[
+                "std_density"
+            ],
 
         "pin_density":
             pin_density,
 
         "avg_fanout":
-            fanout["avg_fanout"],
+            fanout[
+                "avg_fanout"
+            ],
 
         "max_fanout":
-            fanout["max_fanout"],
+            fanout[
+                "max_fanout"
+            ],
 
         "x_spread":
-            placement["x_spread"],
+            placement[
+                "x_spread"
+            ],
 
         "y_spread":
-            placement["y_spread"],
+            placement[
+                "y_spread"
+            ],
 
         "num_registers":
-            def_data["num_registers"],
+            def_data[
+                "num_registers"
+            ],
 
         "logic_depth":
-            timing["logic_depth"],
+            timing[
+                "logic_depth"
+            ],
 
         "crit_path_wirelength":
-            timing["crit_path_wirelength"],
+            timing[
+                "crit_path_wirelength"
+            ],
 
         "estimated_wirelength":
             estimated_wirelength,
@@ -2680,54 +3119,74 @@ def main():
             congestion,
 
         "WNS":
-            timing["WNS"],
+            timing[
+                "WNS"
+            ],
 
         "TNS":
-            timing["TNS"],
+            timing[
+                "TNS"
+            ],
 
         "utilization":
-            env["utilization"],
+            env[
+                "utilization"
+            ],
 
         "clock_period":
-            env["clock_period"],
-
-        # --------------------------------------------------------
-        # ADDITIONAL PHYSICAL DESIGN FEATURES
-        # --------------------------------------------------------
+            env[
+                "clock_period"
+            ],
 
         "wirelength_um":
-            routing["wirelength_um"],
+            routing[
+                "wirelength_um"
+            ],
 
         "via_count":
-            routing["via_count"],
+            routing[
+                "via_count"
+            ],
 
         "routed_net_count":
-            routing["routed_net_count"],
+            routing[
+                "routed_net_count"
+            ],
 
         "hold_WNS":
-            hold["hold_WNS"],
+            hold[
+                "hold_WNS"
+            ],
 
         "hold_TNS":
-            hold["hold_TNS"],
+            hold[
+                "hold_TNS"
+            ],
 
         "num_cells":
-            def_data["num_cells"],
+            def_data[
+                "num_cells"
+            ],
 
         "num_nets":
-            def_data["num_nets"],
+            def_data[
+                "num_nets"
+            ],
 
         "num_pins":
-            def_data["num_pins"],
+            def_data[
+                "num_pins"
+            ],
 
         "num_buffers":
-            def_data["num_buffers"],
-
-        # --------------------------------------------------------
-        # ROUTING DIAGNOSTICS
-        # --------------------------------------------------------
+            def_data[
+                "num_buffers"
+            ],
 
         "route_segment_count":
-            routing["route_segment_count"],
+            routing[
+                "route_segment_count"
+            ],
 
         "routing_geometry_available":
             routing[
@@ -2735,7 +3194,9 @@ def main():
             ],
 
         "wirelength_source":
-            routing["wirelength_source"],
+            routing[
+                "wirelength_source"
+            ],
     }
 
     # ============================================================
@@ -2749,6 +3210,7 @@ def main():
         ] is not None
 
         and
+
         features[
             "routing_geometry_available"
         ]
@@ -2761,6 +3223,7 @@ def main():
         ] is not None
 
         and
+
         features[
             "routing_geometry_available"
         ]
@@ -2775,11 +3238,15 @@ def main():
 
     timing_available = (
 
-        features["WNS"] is not None
+        features[
+            "WNS"
+        ] is not None
 
         and
 
-        features["TNS"] is not None
+        features[
+            "TNS"
+        ] is not None
     )
 
     # ============================================================
@@ -2839,30 +3306,26 @@ def main():
         if features.get(name) is None
     ]
 
-    # ------------------------------------------------------------
-    # Routing-specific validity check.
-    #
-    # wirelength_um = 0 is not accepted as valid.
-    # It must come from actual report data or routed geometry.
-    # ------------------------------------------------------------
+    # ============================================================
+    # ROUTING VALIDITY
+    # ============================================================
 
     if not routing[
         "routing_geometry_available"
     ]:
 
-        if "wirelength_um" not in missing_required:
+        if "routing_geometry" not in missing_required:
 
             missing_required.append(
                 "routing_geometry"
             )
 
-        if "via_count" not in missing_required:
-
-            missing_required.append(
-                "routing_geometry"
-            )
+    # ============================================================
+    # VALID RUN
+    # ============================================================
 
     valid_run = (
+
         len(missing_required) == 0
     )
 
@@ -2899,19 +3362,25 @@ def main():
     # ============================================================
 
     with open(
+
         OUTPUT_FILE,
+
         "w",
+
         encoding="utf-8"
     ) as f:
 
         json.dump(
+
             features,
+
             f,
+
             indent=2
         )
 
     # ============================================================
-    # REPORT
+    # FINAL REPORT
     # ============================================================
 
     print("")

@@ -1144,6 +1144,38 @@ def calculate_routing_from_def(
         nets_section.group(1)
     )
 
+    print("")
+    print("=" * 70)
+    print("RAW DEF ROUTING DIAGNOSTIC")
+    print("=" * 70)
+    
+    route_hits = re.findall(
+        r"(?is)\b(?:ROUTED|FIXED)\b.*?;",
+        net_text
+    )
+    
+    print(
+        f"[DEBUG] ROUTED/FIXED statements found: "
+        f"{len(route_hits)}"
+    )
+    
+    if route_hits:
+    
+        print("")
+        print("[DEBUG] FIRST ROUTED/FIXED STATEMENT:")
+        print("-" * 70)
+        print(route_hits[0][:5000])
+        print("-" * 70)
+    
+    else:
+    
+        print(
+            "[WARNING] No ROUTED/FIXED statements found "
+            "inside NETS section."
+        )
+    
+    print("=" * 70)
+
     # ============================================================
     # Individual NET blocks
     # ============================================================

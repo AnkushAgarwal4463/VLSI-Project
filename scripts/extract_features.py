@@ -26,7 +26,7 @@ WNS_SETUP = RUN_DIR / "wns_setup.rpt"
 TNS_SETUP = RUN_DIR / "tns_setup.rpt"
 
 CONGESTION = RUN_DIR / "congestion.rpt"
-
+GLOBAL_ROUTE_REPORT = RUN_DIR / "global_route.rpt"
 
 # ================================================================
 # BASIC HELPERS
@@ -586,145 +586,121 @@ def calculate_estimated_wirelength(def_data):
 # ================================================================
 
 def extract_congestion():
+    """
+    Extract a scalar congestion metric from the OpenROAD
+    global-route final congestion summary.
 
-    text = read_text(CONGESTION)
+    Primary metric:
+        Total routing usage percentage.
 
-    if not text.strip():
+    Secondary fallback:
+        Maximum layer usage percentage.
 
-        print(
-            "[WARNING] congestion.rpt is missing or empty."
-        )
+    A design with zero routing overflow is valid and returns
+    a real congestion value rather than None.
+    """
 
-        return None
+    # --------------------------------------------------------------
+    # First preference: global_route.rpt
+    # --------------------------------------------------------------
 
-    # ------------------------------------------------------------
-    # Explicit congestion / overflow summary patterns
-    # ------------------------------------------------------------
+    if GLOBAL_ROUTE_REPORT.exists() and GLOBAL_ROUTE_REPORT.stat().st_size > 0:
 
-    patterns = [
+        try:
+            text = GLOBAL_ROUTE_REPORT.read_text(
+                errors="ignore"
+            )
 
-        r"\bcongestion\b\s*[:=]\s*"
-        r"([-+]?\d+(?:\.\d+)?)",
+            # ------------------------------------------------------
+            # Look for the Total row of:
+            #
+            # Total  Resource Demand Usage(%) MaxH / MaxV / Overflow
+            # ------------------------------------------------------
 
-        r"\bcongestion\b\s+"
-        r"([-+]?\d+(?:\.\d+)?)",
+            total_pattern = re.compile(
+                r"^\s*Total\s+"
+                r"[-+]?\d+(?:\.\d+)?\s+"
+                r"[-+]?\d+(?:\.\d+)?\s+"
+                r"([-+]?\d+(?:\.\d+)?)%"
+                r"\s+"
+                r"[-+]?\d+(?:\.\d+)?\s*/\s*"
+                r"[-+]?\d+(?:\.\d+)?\s*/\s*"
+                r"[-+]?\d+(?:\.\d+)?",
+                re.IGNORECASE | re.MULTILINE
+            )
 
-        r"\btotal\s+overflow\b\s*[:=]\s*"
-        r"([-+]?\d+(?:\.\d+)?)",
+            match = total_pattern.search(text)
 
-        r"\boverflow\b\s*[:=]\s*"
-        r"([-+]?\d+(?:\.\d+)?)",
+            if match:
+                return round(float(match.group(1)), 6)
 
-        r"\boverflow\b\s+"
-        r"([-+]?\d+(?:\.\d+)?)",
+            # ------------------------------------------------------
+            # More tolerant Total-row parser
+            # ------------------------------------------------------
 
-        r"\boverflow\b[^\n]*?"
-        r"([-+]?\d+(?:\.\d+)?)",
+            for line in text.splitlines():
 
-        r"\bglobal\s+overflow\b[^\n]*?"
-        r"([-+]?\d+(?:\.\d+)?)",
+                if not re.match(r"^\s*Total\b", line, re.IGNORECASE):
+                    continue
 
-        r"\bmax(?:imum)?\s+congestion\b[^\n]*?"
-        r"([-+]?\d+(?:\.\d+)?)",
+                usage_match = re.search(
+                    r"([-+]?\d+(?:\.\d+)?)\s*%",
+                    line
+                )
 
-        r"\bpeak\s+congestion\b[^\n]*?"
-        r"([-+]?\d+(?:\.\d+)?)",
-    ]
+                if usage_match:
+                    return round(
+                        float(usage_match.group(1)),
+                        6
+                    )
 
-    candidates = []
-
-    for pattern in patterns:
-
-        matches = re.findall(
-            pattern,
-            text,
-            re.I
-        )
-
-        for value in matches:
-
-            try:
-
-                value = float(value)
-
-                if math.isfinite(value):
-                    candidates.append(value)
-
-            except Exception:
-                continue
-
-    if candidates:
-
-        value = max(candidates)
-
-        print(
-            f"[INFO] Congestion extracted from report: "
-            f"{value}"
-        )
-
-        return round(
-            value,
-            6
-        )
-
-    # ------------------------------------------------------------
-    # OpenROAD-style congestion tables
-    # ------------------------------------------------------------
-
-    for line in text.splitlines():
-
-        line_lower = line.lower()
-
-        if (
-            "overflow" not in line_lower
-            and "congestion" not in line_lower
-        ):
-            continue
-
-        numbers = re.findall(
-            r"[-+]?\d+(?:\.\d+)?",
-            line
-        )
-
-        if not numbers:
-            continue
-
-        values = []
-
-        for number in numbers:
-
-            try:
-
-                value = float(number)
-
-                if math.isfinite(value):
-                    values.append(value)
-
-            except Exception:
-                pass
-
-        if values:
-
-            value = max(values)
+        except Exception as exc:
 
             print(
-                "[INFO] Congestion extracted from "
-                f"summary line: {value}"
+                f"[WARNING] Failed to parse global_route.rpt: {exc}"
             )
 
-            return round(
-                value,
-                6
+    # --------------------------------------------------------------
+    # Second preference: congestion.rpt
+    # --------------------------------------------------------------
+
+    if CONGESTION.exists() and CONGESTION.stat().st_size > 0:
+
+        try:
+
+            text = CONGESTION.read_text(
+                errors="ignore"
             )
 
-    print(
-        "[WARNING] Could not identify a congestion "
-        "value in congestion.rpt."
-    )
+            percentages = []
+
+            for match in re.finditer(
+                r"([-+]?\d+(?:\.\d+)?)\s*%",
+                text
+            ):
+
+                value = float(match.group(1))
+
+                if 0.0 <= value <= 1000.0:
+                    percentages.append(value)
+
+            if percentages:
+                return round(
+                    max(percentages),
+                    6
+                )
+
+        except Exception as exc:
+
+            print(
+                f"[WARNING] Failed to parse congestion.rpt: {exc}"
+            )
+
+    # --------------------------------------------------------------
+    # No usable congestion information
+    # --------------------------------------------------------------
 
     return None
-
-
 # ================================================================
 # TIMING SCALAR REPORT
 # ================================================================

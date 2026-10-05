@@ -225,7 +225,29 @@ initialize_floorplan \
 make_tracks
 
 # ----------------------------------------------------------------------
-# 9. Clock constraints
+# 9. RESIZER CONFIGURATION
+# ----------------------------------------------------------------------
+
+puts ""
+puts "=============================================="
+puts "RESIZER CONFIGURATION"
+puts "=============================================="
+
+if {[catch {
+
+    set_wire_rc -layer met2
+
+    puts "\[OK\] Resizer wire RC configured using met2."
+
+} err]} {
+
+    puts "\[WARNING\] set_wire_rc failed:"
+    puts "$err"
+}
+
+puts "\[INFO\] Resizer configuration completed."
+# ----------------------------------------------------------------------
+# 10. Clock constraints
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Creating timing constraints..."
@@ -255,7 +277,7 @@ if {[llength $output_ports] > 0} {
 }
 
 # ----------------------------------------------------------------------
-# 10. Global placement
+# 11. Global placement
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Running global placement..."
@@ -270,7 +292,7 @@ global_placement \
     -density $place_density
 
 # ----------------------------------------------------------------------
-# 11. Pin placement
+# 12. Pin placement
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Placing IO pins..."
@@ -285,37 +307,132 @@ if {[catch {
 }
 
 # ----------------------------------------------------------------------
-# 12. Detailed placement
+# 13. Detailed placement
 # ----------------------------------------------------------------------
 
 detailed_placement
 check_placement
 
 # ----------------------------------------------------------------------
-# 13. Repair design
+# 14. RESIZER / TIMING REPAIR
 # ----------------------------------------------------------------------
 
+puts ""
+puts "=============================================="
+puts "RESIZER / TIMING REPAIR"
+puts "=============================================="
+
+# ----------------------------------------------------------------------
+# Check available buffer cells
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Checking available buffer cells..."
+
 if {[catch {
-    repair_design
+
+    set buf_cells [get_lib_cells *BUF*]
+
+    puts "\[RESIZER\] Available BUF cells: [llength $buf_cells]"
+
+    foreach bc $buf_cells {
+        puts "\[RESIZER\] BUF: $bc"
+    }
+
 } err]} {
-    puts "\[WARNING\] repair_design failed:"
+
+    puts "\[WARNING\] Buffer-cell query failed:"
     puts "$err"
 }
 
+# ----------------------------------------------------------------------
+# Design repair
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Running repair_design..."
+
 if {[catch {
+
+    repair_design
+
+} err]} {
+
+    puts "\[WARNING\] repair_design failed:"
+    puts "$err"
+
+} else {
+
+    puts "\[OK\] repair_design completed."
+}
+
+# ----------------------------------------------------------------------
+# Setup timing repair
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Running repair_timing..."
+
+if {[catch {
+
     repair_timing \
         -setup \
         -setup_margin 0.2
+
 } err]} {
+
     puts "\[WARNING\] repair_timing failed:"
+    puts "$err"
+
+} else {
+
+    puts "\[OK\] repair_timing completed."
+}
+
+# ----------------------------------------------------------------------
+# Legalize after Resizer
+# ----------------------------------------------------------------------
+
+puts "\[INFO\] Running detailed placement after Resizer..."
+
+if {[catch {
+
+    detailed_placement
+    check_placement
+
+} err]} {
+
+    puts "\[WARNING\] Post-Resizer placement failed:"
+    puts "$err"
+} else {
+
+    puts "\[OK\] Post-Resizer placement completed."
+}
+
+# ----------------------------------------------------------------------
+# Resizer diagnostic
+# ----------------------------------------------------------------------
+
+puts ""
+puts "=============================================="
+puts "RESIZER DIAGNOSTIC"
+puts "=============================================="
+
+if {[catch {
+
+    set all_cells [get_cells -hierarchical *]
+    set all_nets  [get_nets *]
+
+    puts "\[RESIZER\] Cell count : [llength $all_cells]"
+    puts "\[RESIZER\] Net count  : [llength $all_nets]"
+
+} err]} {
+
+    puts "\[WARNING\] Resizer diagnostic failed:"
     puts "$err"
 }
 
-detailed_placement
-check_placement
+puts "=============================================="
 
 # ----------------------------------------------------------------------
-# 14. Global routing
+# 15. Global routing
 # ----------------------------------------------------------------------
 
 puts "\[INFO\] Running global routing..."
@@ -649,7 +766,6 @@ foreach f [list \
     "${run_dir}/global_route_segments.txt" \
     "${run_dir}/global_route.rpt" \
     "${run_dir}/congestion.rpt" \
-    "${run_dir}/wirelength_global.rpt" \
     "${run_dir}/wirelength_detailed.rpt" \
     "${run_dir}/wirelength_final.rpt" \
     "${run_dir}/route_status_final.rpt" \
@@ -774,7 +890,6 @@ foreach f [list \
     "${run_dir}/global_route_segments.txt" \
     "${run_dir}/global_route.rpt" \
     "${run_dir}/congestion.rpt" \
-    "${run_dir}/wirelength_global.rpt" \
     "${run_dir}/wirelength_detailed.rpt" \
     "${run_dir}/wirelength_final.rpt" \
     "${run_dir}/route_status_final.rpt" \
@@ -817,7 +932,6 @@ puts "  final.def"
 puts "  route.guide"
 puts "  global_route_segments.txt"
 puts "  global_route.rpt"
-puts "  wirelength_global.rpt"
 puts "  wirelength_detailed.rpt"
 puts "  wirelength_final.rpt"
 puts "  route_status_final.rpt"

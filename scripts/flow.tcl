@@ -514,6 +514,8 @@ puts "\[OK\] final.def generated: $def_size bytes"
 # Use the explicit net list here as well.
 # ----------------------------------------------------------------------
 
+set all_nets [get_nets *]
+
 puts "\[INFO\] Measuring detailed-route wirelength..."
 
 if {[catch {
@@ -645,6 +647,7 @@ puts "=============================================="
 foreach f [list \
     "${run_dir}/route.guide" \
     "${run_dir}/global_route_segments.txt" \
+    "${run_dir}/global_route.rpt" \
     "${run_dir}/congestion.rpt" \
     "${run_dir}/wirelength_global.rpt" \
     "${run_dir}/wirelength_detailed.rpt" \
@@ -769,6 +772,7 @@ foreach f [list \
     "${run_dir}/final.def" \
     "${run_dir}/route.guide" \
     "${run_dir}/global_route_segments.txt" \
+    "${run_dir}/global_route.rpt" \
     "${run_dir}/congestion.rpt" \
     "${run_dir}/wirelength_global.rpt" \
     "${run_dir}/wirelength_detailed.rpt" \
@@ -812,7 +816,7 @@ puts "  final.odb"
 puts "  final.def"
 puts "  route.guide"
 puts "  global_route_segments.txt"
-puts "  congestion.rpt"
+puts "  global_route.rpt"
 puts "  wirelength_global.rpt"
 puts "  wirelength_detailed.rpt"
 puts "  wirelength_final.rpt"
@@ -829,7 +833,7 @@ puts ""
 puts "Routing metrics:"
 puts "  Wirelength : calculated from final.def"
 puts "  Via count  : calculated from final.def"
-puts "  Congestion : extracted from congestion.rpt"
+puts "  Congestion : extracted from global_route.rpt"
 
 puts ""
 puts "Timing metrics:"

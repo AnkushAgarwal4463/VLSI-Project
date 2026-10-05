@@ -38,35 +38,44 @@ WIRELENGTH_DETAILED = RUN_DIR / "wirelength_detailed.rpt"
 # ================================================================
 
 def safe_float(value):
+
     try:
         value = float(value)
+
         if math.isfinite(value):
             return value
+
     except Exception:
         pass
+
     return None
 
 
 def read_text(path):
+
     if not path.exists():
         return ""
 
     try:
         return path.read_text(errors="ignore")
+
     except Exception:
         return ""
 
 
 def extract_first_number(text):
+
     if not text:
         return None
 
     matches = re.findall(
-        r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?",
+        r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)"
+        r"(?:[eE][-+]?\d+)?",
         text
     )
 
     for value in matches:
+
         number = safe_float(value)
 
         if number is not None:
@@ -83,17 +92,33 @@ def get_environment_features():
 
     return {
         "run_tag": RUN_TAG,
+
         "array_size": int(
-            os.environ.get("ARRAY_SIZE", "4")
+            os.environ.get(
+                "ARRAY_SIZE",
+                "4"
+            )
         ),
+
         "data_width": int(
-            os.environ.get("DATA_WIDTH", "8")
+            os.environ.get(
+                "DATA_WIDTH",
+                "8"
+            )
         ),
+
         "utilization": float(
-            os.environ.get("UTIL", "50")
+            os.environ.get(
+                "UTIL",
+                "50"
+            )
         ),
+
         "clock_period": float(
-            os.environ.get("CLK_PERIOD", "5.0")
+            os.environ.get(
+                "CLK_PERIOD",
+                "5.0"
+            )
         ),
     }
 
@@ -107,10 +132,13 @@ def parse_def(def_file):
     text = read_text(def_file)
 
     result = {
+
         "die_area_um2": None,
+
         "core_area_um2": None,
 
         "num_cells": 0,
+
         "num_nets": 0,
 
         # Top-level IO pins only.
@@ -120,9 +148,11 @@ def parse_def(def_file):
         "num_instance_pins": 0,
 
         "num_registers": 0,
+
         "num_buffers": 0,
 
         "components": {},
+
         "nets": {},
 
         # DEF-declared via names.
@@ -142,7 +172,7 @@ def parse_def(def_file):
         r"\s*"
         r"\(\s*(-?\d+)\s+(-?\d+)\s*\)",
         text,
-        re.S
+        re.S | re.I
     )
 
     if m:
@@ -152,10 +182,16 @@ def parse_def(def_file):
             m.groups()
         )
 
+        # SKY130 DEF database units.
         dbu = 1000.0
 
-        width = abs(x1 - x0) / dbu
-        height = abs(y1 - y0) / dbu
+        width = abs(
+            x1 - x0
+        ) / dbu
+
+        height = abs(
+            y1 - y0
+        ) / dbu
 
         result["die_area_um2"] = (
             width * height
@@ -166,33 +202,24 @@ def parse_def(def_file):
     # ============================================================
 
     comp_section = re.search(
-        r"COMPONENTS\s+\d+\s*;(.*?)END COMPONENTS",
+        r"COMPONENTS\s+\d+\s*;"
+        r"(.*?)"
+        r"END COMPONENTS",
         text,
         re.S | re.I
     )
 
     if comp_section:
 
-        component_text = comp_section.group(1)
-
-        # Parse one component at a time.
-        component_blocks = re.findall(
-            r"(?ms)^\s*-\s+(\S+)\s+(\S+).*?"
-            r"(?=^\s*-\s+\S+|\Z)",
-            component_text
+        component_text = (
+            comp_section.group(1)
         )
 
-        for inst, master_and_body in component_blocks:
-
-            # The above expression gives only two groups because
-            # the body is included in the second group only in
-            # some DEF layouts. Use a direct search below instead.
-            pass
-
-        # More reliable block parser.
         block_pattern = re.compile(
-            r"(?ms)^\s*-\s+(\S+)\s+(\S+)"
-            r"(.*?)(?=^\s*-\s+\S+|\Z)"
+            r"(?ms)"
+            r"^\s*-\s+(\S+)\s+(\S+)"
+            r"(.*?)"
+            r"(?=^\s*-\s+\S+|\Z)"
         )
 
         for match in block_pattern.finditer(
@@ -200,7 +227,9 @@ def parse_def(def_file):
         ):
 
             inst = match.group(1)
+
             master = match.group(2)
+
             body = match.group(3)
 
             placed = re.search(
@@ -213,12 +242,20 @@ def parse_def(def_file):
             if not placed:
                 continue
 
-            x = int(placed.group(1))
-            y = int(placed.group(2))
+            x = int(
+                placed.group(1)
+            )
+
+            y = int(
+                placed.group(2)
+            )
 
             result["components"][inst] = {
+
                 "master": master,
+
                 "x": x,
+
                 "y": y,
             }
 
@@ -230,28 +267,42 @@ def parse_def(def_file):
     # REGISTER / BUFFER CLASSIFICATION
     # ============================================================
 
-    for data in result["components"].values():
+    for data in result[
+        "components"
+    ].values():
 
-        master = data["master"].lower()
+        master = data[
+            "master"
+        ].lower()
 
         if re.search(
             r"(dff|dfr|dfb|dfx|dlr|dlh|latch)",
-            master
+            master,
+            re.I
         ):
-            result["num_registers"] += 1
+
+            result[
+                "num_registers"
+            ] += 1
 
         if re.search(
             r"(^|_)buf|buf",
-            master
+            master,
+            re.I
         ):
-            result["num_buffers"] += 1
+
+            result[
+                "num_buffers"
+            ] += 1
 
     # ============================================================
     # VIA DECLARATIONS
     # ============================================================
 
     via_section = re.search(
-        r"VIAS\s+\d+\s*;(.*?)END VIAS",
+        r"VIAS\s+\d+\s*;"
+        r"(.*?)"
+        r"END VIAS",
         text,
         re.S | re.I
     )
@@ -266,7 +317,9 @@ def parse_def(def_file):
             re.M
         )
 
-        result["via_names"] = set(
+        result[
+            "via_names"
+        ] = set(
             v.lower()
             for v in via_matches
         )
@@ -276,29 +329,41 @@ def parse_def(def_file):
     # ============================================================
 
     nets_section = re.search(
-        r"NETS\s+\d+\s*;(.*?)END NETS",
+        r"NETS\s+\d+\s*;"
+        r"(.*?)"
+        r"END NETS",
         text,
         re.S | re.I
     )
 
     if nets_section:
 
-        net_text = nets_section.group(1)
+        net_text = (
+            nets_section.group(1)
+        )
 
-        # DEF net blocks begin with "- netname".
         net_pattern = re.compile(
-            r"(?ms)^\s*-\s+(\S+)"
-            r"(.*?)(?=^\s*-\s+\S+|\Z)"
+            r"(?ms)"
+            r"^\s*-\s+(\S+)"
+            r"(.*?)"
+            r"(?=^\s*-\s+\S+|\Z)"
         )
 
         for match in net_pattern.finditer(
             net_text
         ):
 
-            net_name = match.group(1)
-            body = match.group(2)
+            net_name = (
+                match.group(1)
+            )
 
-            result["nets"][net_name] = body
+            body = (
+                match.group(2)
+            )
+
+            result[
+                "nets"
+            ][net_name] = body
 
     result["num_nets"] = len(
         result["nets"]
@@ -309,7 +374,9 @@ def parse_def(def_file):
     # ============================================================
 
     pin_section = re.search(
-        r"PINS\s+\d+\s*;(.*?)END PINS",
+        r"PINS\s+\d+\s*;"
+        r"(.*?)"
+        r"END PINS",
         text,
         re.S | re.I
     )
@@ -322,7 +389,9 @@ def parse_def(def_file):
             re.M
         )
 
-        result["num_pins"] = len(
+        result[
+            "num_pins"
+        ] = len(
             pin_matches
         )
 
@@ -336,18 +405,25 @@ def parse_def(def_file):
         r"\(\s*(\S+)\s+(\S+)\s*\)"
     )
 
-    for body in result["nets"].values():
+    for body in result[
+        "nets"
+    ].values():
 
-        for inst, pin in connection_pattern.findall(
-            body
+        for inst, pin in (
+            connection_pattern.findall(
+                body
+            )
         ):
 
-            if inst in result["components"]:
+            if inst in result[
+                "components"
+            ]:
+
                 total_instance_connections += 1
 
-    result["num_instance_pins"] = (
-        total_instance_connections
-    )
+    result[
+        "num_instance_pins"
+    ] = total_instance_connections
 
     return result
 
@@ -361,6 +437,7 @@ def is_power_ground_net(net_name):
     name = net_name.upper()
 
     power_patterns = [
+
         "VDD",
         "VSS",
         "VPWR",
@@ -381,16 +458,21 @@ def is_power_ground_net(net_name):
             name == pattern
             or name.startswith(pattern)
         ):
+
             return True
 
     return False
 
 
-def is_clock_net(net_name, body=""):
+def is_clock_net(
+    net_name,
+    body=""
+):
 
     name = net_name.lower()
 
     clock_keywords = [
+
         "clk",
         "clock",
         "scan_clk",
@@ -402,19 +484,64 @@ def is_clock_net(net_name, body=""):
         if keyword in name:
             return True
 
-    # Some generated designs identify the clock
-    # only in the connection/body text.
     if re.search(
         r"\b(clock|clk)\b",
         body,
         re.I
     ):
+
         return True
 
     return False
 
 
-def get_signal_connections(body, components):
+def is_reset_net(
+    net_name,
+    body=""
+):
+
+    name = net_name.lower()
+
+    reset_keywords = [
+
+        "reset",
+        "rst",
+        "reset_n",
+        "rst_n",
+        "resetb",
+        "rstb",
+    ]
+
+    for keyword in reset_keywords:
+
+        if (
+            name == keyword
+            or name.startswith(
+                keyword + "_"
+            )
+            or name.endswith(
+                "_" + keyword
+            )
+            or keyword in name
+        ):
+
+            return True
+
+    if re.search(
+        r"\b(reset|rst)\b",
+        body,
+        re.I
+    ):
+
+        return True
+
+    return False
+
+
+def get_signal_connections(
+    body,
+    components
+):
 
     connection_pattern = re.compile(
         r"\(\s*(\S+)\s+(\S+)\s*\)"
@@ -422,8 +549,10 @@ def get_signal_connections(body, components):
 
     connections = []
 
-    for inst, pin in connection_pattern.findall(
-        body
+    for inst, pin in (
+        connection_pattern.findall(
+            body
+        )
     ):
 
         if inst in components:
@@ -447,16 +576,24 @@ def calculate_component_features(
     requested_utilization
 ):
 
-    components = def_data["components"]
+    components = def_data[
+        "components"
+    ]
 
     if not components:
 
         return {
+
             "x_spread": None,
+
             "y_spread": None,
+
             "max_density": None,
+
             "mean_density": None,
+
             "std_density": None,
+
             "pin_density": None,
         }
 
@@ -481,30 +618,31 @@ def calculate_component_features(
     # ============================================================
     # LOCAL PLACEMENT DENSITY
     #
-    # IMPORTANT:
+    # This is a placement-distribution feature.
     #
-    # The previous implementation normalized the grid such that
-    # mean_density was ALWAYS 100%.
-    #
-    # That destroys information.
-    #
-    # Here the average bin density is anchored to the requested
-    # global placement utilization.
+    # The component coordinates are divided into a 10x10 grid.
+    # Local density is normalized relative to the average number
+    # of components per bin and then scaled to the requested
+    # global utilization.
     #
     # Therefore:
     #
-    #     mean_density ~= utilization
+    #     mean_density ~= requested_utilization
     #
-    # while local clustering can make max_density > utilization.
+    # This is NOT the same as true physical cell-area density.
+    # A true area-based density requires LEF/ODB cell dimensions.
     # ============================================================
 
     nx = 10
+
     ny = 10
 
     xmin = min(xs)
+
     xmax = max(xs)
 
     ymin = min(ys)
+
     ymax = max(ys)
 
     xrange = max(
@@ -518,10 +656,12 @@ def calculate_component_features(
     )
 
     grid = [
+
         [
             0
             for _ in range(nx)
         ]
+
         for _ in range(ny)
     ]
 
@@ -556,8 +696,11 @@ def calculate_component_features(
         grid[gy][gx] += 1
 
     counts = [
+
         count
+
         for row in grid
+
         for count in row
     ]
 
@@ -567,10 +710,12 @@ def calculate_component_features(
     )
 
     if mean_count <= 0:
+
         densities = [
             0.0
             for _ in counts
         ]
+
     else:
 
         densities = [
@@ -590,12 +735,17 @@ def calculate_component_features(
     )
 
     variance = (
+
         sum(
+
             (
                 d - mean_density
             ) ** 2
+
             for d in densities
+
         )
+
         / len(densities)
     )
 
@@ -608,6 +758,7 @@ def calculate_component_features(
     )
 
     return {
+
         "x_spread": round(
             x_spread,
             6
@@ -641,41 +792,71 @@ def calculate_component_features(
 # FANOUT
 # ================================================================
 
-def calculate_fanout_features(def_data):
+def calculate_fanout_features(
+    def_data
+):
 
-    components = def_data["components"]
-    nets = def_data["nets"]
+    components = def_data[
+        "components"
+    ]
+
+    nets = def_data[
+        "nets"
+    ]
 
     fanouts = []
+
+    excluded_clock = 0
+
+    excluded_reset = 0
+
+    excluded_power = 0
 
     for net_name, body in nets.items():
 
         if is_power_ground_net(
             net_name
         ):
+
+            excluded_power += 1
+
             continue
 
-        # Do not let global clock distribution dominate
-        # the ordinary signal-fanout statistics.
+        # Exclude global clock distribution.
         if is_clock_net(
             net_name,
             body
         ):
+
+            excluded_clock += 1
+
             continue
 
-        connections = get_signal_connections(
-            body,
-            components
+        # Exclude reset distribution from
+        # ordinary datapath fanout.
+        if is_reset_net(
+            net_name,
+            body
+        ):
+
+            excluded_reset += 1
+
+            continue
+
+        connections = (
+            get_signal_connections(
+                body,
+                components
+            )
         )
 
         if len(connections) < 2:
             continue
 
-        # One connection is normally the driver.
-        # Remaining connections are sinks.
-        sink_count = len(
-            connections
-        ) - 1
+        # One connection is treated as the driver.
+        sink_count = (
+            len(connections) - 1
+        )
 
         if sink_count < 1:
             continue
@@ -684,17 +865,38 @@ def calculate_fanout_features(def_data):
             sink_count
         )
 
+    print(
+        "[INFO] Fanout nets excluded:"
+    )
+
+    print(
+        f"       power/ground = {excluded_power}"
+    )
+
+    print(
+        f"       clock        = {excluded_clock}"
+    )
+
+    print(
+        f"       reset        = {excluded_reset}"
+    )
+
     if not fanouts:
 
         return {
+
             "avg_fanout": None,
+
             "max_fanout": None,
         }
 
     return {
+
         "avg_fanout": round(
+
             sum(fanouts)
             / len(fanouts),
+
             6
         ),
 
@@ -721,23 +923,53 @@ def calculate_pin_density(
     ]
 
     if (
+
         die_area is None
+
         or die_area <= 0
+
         or instance_pins <= 0
+
     ):
+
         return None
 
-    # pins / 10,000 um^2
-    return round(
+    # ------------------------------------------------------------
+    # Unit:
+    #
+    #     instance pins / 10,000 um^2
+    # ------------------------------------------------------------
+
+    value = (
         instance_pins
         / die_area
-        * 1e4,
+        * 1e4
+    )
+
+    print(
+        "[INFO] Pin-density calculation:"
+    )
+
+    print(
+        f"       die area       = {die_area:.6f} um^2"
+    )
+
+    print(
+        f"       instance pins  = {instance_pins}"
+    )
+
+    print(
+        f"       pin density    = {value:.6f} pins/10k um^2"
+    )
+
+    return round(
+        value,
         6
     )
 
 
 # ================================================================
-# ROUTING REPORT WIRELENGTH
+# WIRELENGTH REPORT PARSER
 # ================================================================
 
 def extract_wirelength_from_report(
@@ -755,21 +987,17 @@ def extract_wirelength_from_report(
 
     patterns = [
 
-        # wirelength = 12345
         r"\bwirelength\b\s*[:=]\s*"
         r"([-+]?\d+(?:\.\d+)?)",
 
-        # total wire length = 12345
         r"\btotal\s+wire\s+length\b"
         r"\s*[:=]\s*"
         r"([-+]?\d+(?:\.\d+)?)",
 
-        # Wire length: 12345
         r"\bwire\s+length\b"
         r"\s*[:=]\s*"
         r"([-+]?\d+(?:\.\d+)?)",
 
-        # HPWL / wire length style reports
         r"\bHPWL\b\s*[:=]\s*"
         r"([-+]?\d+(?:\.\d+)?)",
     ]
@@ -793,41 +1021,68 @@ def extract_wirelength_from_report(
                 and value > 0
             ):
 
+                print(
+                    "[INFO] Wirelength extracted "
+                    f"from {path.name}: {value}"
+                )
+
                 return round(
                     value,
                     6
                 )
 
-    # Search lines containing "wire".
+    # ============================================================
+    # Search lines containing wirelength-related terms.
+    # ============================================================
+
     for line in text.splitlines():
 
-        if "wire" not in line.lower():
+        lower = line.lower()
+
+        if not any(
+            word in lower
+            for word in [
+                "wirelength",
+                "wire length",
+                "total wire",
+                "hpwl",
+            ]
+        ):
+
             continue
 
         numbers = re.findall(
+
             r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)",
+
             line
         )
 
-        if numbers:
+        if not numbers:
+            continue
 
-            # Use the last number on a wirelength summary line.
-            for value_text in reversed(
-                numbers
+        for value_text in reversed(
+            numbers
+        ):
+
+            value = safe_float(
+                value_text
+            )
+
+            if (
+                value is not None
+                and value > 0
             ):
 
-                value = safe_float(
-                    value_text
+                print(
+                    "[INFO] Wirelength extracted "
+                    f"from {path.name}: {value}"
                 )
 
-                if (
-                    value is not None
-                    and value > 0
-                ):
-                    return round(
-                        value,
-                        6
-                    )
+                return round(
+                    value,
+                    6
+                )
 
     return None
 
@@ -845,34 +1100,70 @@ def calculate_routing_from_def(
         def_file
     )
 
+    result = {
+
+        "wirelength_um": None,
+
+        "via_count": None,
+
+        "routed_net_count": None,
+
+        "route_segment_count": 0,
+
+        "routing_geometry_available": False,
+    }
+
     if not text:
 
-        return {
-            "wirelength_um": None,
-            "via_count": None,
-            "routed_net_count": None,
-        }
+        return result
+
+    # ============================================================
+    # NETS section
+    # ============================================================
 
     nets_section = re.search(
-        r"NETS\s+\d+\s*;(.*?)END NETS",
+
+        r"NETS\s+\d+\s*;"
+        r"(.*?)"
+        r"END NETS",
+
         text,
+
         re.S | re.I
     )
 
     if not nets_section:
 
-        return {
-            "wirelength_um": None,
-            "via_count": None,
-            "routed_net_count": None,
-        }
+        print(
+            "[WARNING] NETS section not found in final.def."
+        )
 
-    net_text = nets_section.group(1)
+        return result
+
+    net_text = (
+        nets_section.group(1)
+    )
+
+    # ============================================================
+    # Individual NET blocks
+    # ============================================================
 
     net_blocks = re.findall(
-        r"(?ms)^\s*-\s+\S+.*?"
+
+        r"(?ms)"
+        r"^\s*-\s+\S+"
+        r".*?"
         r"(?=^\s*-\s+\S+|\Z)",
+
         net_text
+    )
+
+    print(
+        f"[DEBUG] NETS section found: True"
+    )
+
+    print(
+        f"[DEBUG] Total NET blocks: {len(net_blocks)}"
     )
 
     routed_net_count = 0
@@ -881,36 +1172,53 @@ def calculate_routing_from_def(
 
     via_count = 0
 
+    route_segment_count = 0
+
+    routing_geometry_found = False
+
     declared_vias = def_data[
         "via_names"
     ]
 
-    # Coordinate pattern.
+    # ============================================================
+    # Coordinate parser
+    #
+    # DEF routing coordinates appear as:
+    #
+    #     (123 456)
+    #
+    # ============================================================
+
     coordinate_pattern = re.compile(
-        r"\(\s*(-?\d+)\s+(-?\d+)\s*\)"
+
+        r"\(\s*"
+        r"(-?\d+)"
+        r"\s+"
+        r"(-?\d+)"
+        r"\s*\)"
     )
 
-    for block in net_blocks:
+    debug_printed = False
 
-        if not re.search(
-            r"\bROUTED\b|\bFIXED\b",
-            block,
-            re.I
-        ):
-            continue
+    # ============================================================
+    # Process every net
+    # ============================================================
 
-        routed_net_count += 1
+    for block_index, block in enumerate(
+        net_blocks
+    ):
 
-        # ========================================================
-        # Isolate routing after ROUTED/FIXED.
-        # This prevents pin coordinates before the routing
-        # statement from being included.
-        # ========================================================
+        # --------------------------------------------------------
+        # Ignore nets without routed geometry.
+        # --------------------------------------------------------
 
         route_matches = list(
             re.finditer(
+
                 r"\b(?:ROUTED|FIXED)\b",
+
                 block,
+
                 re.I
             )
         )
@@ -918,62 +1226,134 @@ def calculate_routing_from_def(
         if not route_matches:
             continue
 
+        routed_net_count += 1
+
+        # --------------------------------------------------------
+        # Only parse the first actual ROUTED/FIXED section.
+        # --------------------------------------------------------
+
         route_text = block[
             route_matches[0].start():
         ]
 
+        # --------------------------------------------------------
+        # Debug first routed net.
+        # --------------------------------------------------------
+
+        if not debug_printed:
+
+            net_name_match = re.match(
+                r"\s*-\s+(\S+)",
+                block
+            )
+
+            net_name = (
+
+                net_name_match.group(1)
+
+                if net_name_match
+
+                else "<unknown>"
+            )
+
+            print(
+                "[DEBUG] First routed net:"
+                f" {net_name}"
+            )
+
+            print(
+                "[DEBUG] First routed net "
+                "route text:"
+            )
+
+            print(
+                route_text[:2000]
+            )
+
+            debug_printed = True
+
         # ========================================================
-        # Count vias by matching DEF-declared via names.
+        # VIA COUNT
         #
-        # This handles names such as:
+        # Match against actual DEF-declared via names.
         #
-        #   VIA12
-        #   M2_M3
-        #   VIA_M2_M3
+        # Examples:
         #
-        # rather than only "via123".
+        #     VIA12
+        #     M2_M3
+        #     VIA_M2_M3
         # ========================================================
 
         if declared_vias:
 
             tokens = re.findall(
-                r"[A-Za-z_][A-Za-z0-9_.$/-]*",
+
+                r"[A-Za-z_]"
+                r"[A-Za-z0-9_.$/-]*",
+
                 route_text
             )
 
             for token in tokens:
 
-                if token.lower() in declared_vias:
+                if (
+                    token.lower()
+                    in declared_vias
+                ):
 
                     via_count += 1
 
         # ========================================================
-        # Safer route wirelength.
+        # ROUTE SEGMENTS
         #
-        # Split at NEW because each NEW route starts a new path.
+        # DEF syntax can contain:
+        #
+        # ROUTED met1 ...
+        #
+        # NEW met2 ...
+        #
+        # Each NEW begins another route path.
         # ========================================================
 
         route_parts = re.split(
+
             r"\bNEW\b",
+
             route_text,
+
             flags=re.I
         )
 
-        for part in route_parts:
+        for part_index, part in enumerate(
+            route_parts
+        ):
 
             coords = [
+
                 (
                     int(x),
                     int(y)
                 )
-                for x, y in
-                coordinate_pattern.findall(
+
+                for x, y
+                in coordinate_pattern.findall(
                     part
                 )
             ]
 
             if len(coords) < 2:
                 continue
+
+            routing_geometry_found = True
+
+            # Number of physical point-to-point segments.
+            route_segment_count += (
+                len(coords) - 1
+            )
+
+            # ----------------------------------------------------
+            # Manhattan route length.
+            # ----------------------------------------------------
 
             for i in range(
                 1,
@@ -988,34 +1368,97 @@ def calculate_routing_from_def(
                     i
                 ]
 
-                wirelength_dbu += (
+                segment_length = (
+
                     abs(x2 - x1)
+
                     + abs(y2 - y1)
                 )
 
-    wirelength_um = None
+                wirelength_dbu += (
+                    segment_length
+                )
 
-    if wirelength_dbu > 0:
+    # ============================================================
+    # Final routing diagnostics
+    # ============================================================
 
-        wirelength_um = round(
-            wirelength_dbu / 1000.0,
-            6
+    if routing_geometry_found:
+
+        result[
+            "routing_geometry_available"
+        ] = True
+
+    result[
+        "route_segment_count"
+    ] = int(
+        route_segment_count
+    )
+
+    if routed_net_count > 0:
+
+        result[
+            "routed_net_count"
+        ] = int(
+            routed_net_count
         )
 
-    return {
-        "wirelength_um":
-            wirelength_um,
+    if routing_geometry_found:
 
-        "via_count":
-            int(via_count),
+        if wirelength_dbu > 0:
 
-        "routed_net_count":
-            (
-                int(routed_net_count)
-                if routed_net_count > 0
-                else None
-            ),
-    }
+            result[
+                "wirelength_um"
+            ] = round(
+
+                wirelength_dbu
+                / 1000.0,
+
+                6
+            )
+
+        # --------------------------------------------------------
+        # Via count is valid only if route geometry exists.
+        # Zero is therefore meaningful when the parser found
+        # actual routed geometry but no declared vias.
+        # --------------------------------------------------------
+
+        result[
+            "via_count"
+        ] = int(
+            via_count
+        )
+
+    print(
+        "[INFO] DEF routing diagnostics:"
+    )
+
+    print(
+        f"       routed nets       = "
+        f"{result['routed_net_count']}"
+    )
+
+    print(
+        f"       route segments    = "
+        f"{result['route_segment_count']}"
+    )
+
+    print(
+        f"       wirelength (um)   = "
+        f"{result['wirelength_um']}"
+    )
+
+    print(
+        f"       via count         = "
+        f"{result['via_count']}"
+    )
+
+    print(
+        f"       geometry found    = "
+        f"{result['routing_geometry_available']}"
+    )
+
+    return result
 
 
 # ================================================================
@@ -1027,8 +1470,19 @@ def calculate_routing_features(
     def_file
 ):
 
+    print("")
+    print(
+        "=============================================="
+    )
+    print(
+        "ROUTING FEATURE EXTRACTION"
+    )
+    print(
+        "=============================================="
+    )
+
     # ------------------------------------------------------------
-    # Prefer OpenROAD wirelength report.
+    # First try OpenROAD wirelength reports.
     # ------------------------------------------------------------
 
     wirelength = (
@@ -1036,6 +1490,18 @@ def calculate_routing_features(
             WIRELENGTH_FINAL
         )
     )
+
+    wirelength_source = None
+
+    if wirelength is not None:
+
+        wirelength_source = (
+            "wirelength_final.rpt"
+        )
+
+    # ------------------------------------------------------------
+    # Detailed routing report fallback.
+    # ------------------------------------------------------------
 
     if wirelength is None:
 
@@ -1045,8 +1511,14 @@ def calculate_routing_features(
             )
         )
 
+        if wirelength is not None:
+
+            wirelength_source = (
+                "wirelength_detailed.rpt"
+            )
+
     # ------------------------------------------------------------
-    # DEF fallback.
+    # Always parse final.def.
     # ------------------------------------------------------------
 
     def_routing = (
@@ -1056,15 +1528,45 @@ def calculate_routing_features(
         )
     )
 
+    # ------------------------------------------------------------
+    # Actual routed DEF geometry fallback.
+    # ------------------------------------------------------------
+
     if wirelength is None:
 
-        wirelength = def_routing[
-            "wirelength_um"
-        ]
+        wirelength = (
+            def_routing[
+                "wirelength_um"
+            ]
+        )
+
+        if wirelength is not None:
+
+            wirelength_source = (
+                "final.def routed geometry"
+            )
+
+    if wirelength_source:
+
+        print(
+            "[OK] Authoritative wirelength "
+            f"source: {wirelength_source}"
+        )
+
+    else:
+
+        print(
+            "[WARNING] No authoritative "
+            "wirelength found."
+        )
 
     return {
+
         "wirelength_um":
             wirelength,
+
+        "wirelength_source":
+            wirelength_source,
 
         "via_count":
             def_routing[
@@ -1074,6 +1576,16 @@ def calculate_routing_features(
         "routed_net_count":
             def_routing[
                 "routed_net_count"
+            ],
+
+        "route_segment_count":
+            def_routing[
+                "route_segment_count"
+            ],
+
+        "routing_geometry_available":
+            def_routing[
+                "routing_geometry_available"
             ],
     }
 
@@ -1102,10 +1614,16 @@ def calculate_estimated_wirelength(
         if is_power_ground_net(
             net_name
         ):
+
             continue
 
         refs = re.findall(
-            r"\(\s+(\S+)\s+\S+\s*\)",
+
+            r"\(\s+"
+            r"(\S+)"
+            r"\s+\S+"
+            r"\s*\)",
+
             body
         )
 
@@ -1116,8 +1634,11 @@ def calculate_estimated_wirelength(
         for ref in refs:
 
             if (
+
                 ref in components
+
                 and ref not in seen
+
             ):
 
                 c = components[
@@ -1158,7 +1679,9 @@ def calculate_estimated_wirelength(
         return None
 
     return round(
+
         total_dbu / 1000.0,
+
         6
     )
 
@@ -1177,14 +1700,17 @@ def extract_congestion():
             return None
 
         # --------------------------------------------------------
-        # Look ONLY for routing-related lines.
-        # Do NOT scan every percentage in openroad_log.txt.
+        # Look only for routing-related lines.
         # --------------------------------------------------------
 
         routing_keywords = (
+
             "congestion",
+
             "overflow",
+
             "routing",
+
             "gcell",
         )
 
@@ -1193,29 +1719,42 @@ def extract_congestion():
             lower = line.lower()
 
             if not any(
+
                 keyword in lower
-                for keyword in routing_keywords
+
+                for keyword
+                in routing_keywords
+
             ):
+
                 continue
 
             matches = re.findall(
-                r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)"
+
+                r"[-+]?"
+                r"(?:\d+(?:\.\d*)?|\.\d+)"
                 r"\s*%",
+
                 line
             )
 
             for value_text in matches:
 
                 value = safe_float(
+
                     value_text.replace(
                         "%",
                         ""
                     ).strip()
+
                 )
 
                 if (
+
                     value is not None
+
                     and 0.0 <= value <= 1000.0
+
                 ):
 
                     return round(
@@ -1228,10 +1767,14 @@ def extract_congestion():
         # --------------------------------------------------------
 
         match = re.search(
+
             r"^\s*Total\b.*?"
-            r"([-+]?(?:\d+(?:\.\d*)?|\.\d+))"
+            r"([-+]?"
+            r"(?:\d+(?:\.\d*)?|\.\d+))"
             r"\s*%",
+
             text,
+
             re.I | re.M
         )
 
@@ -1242,9 +1785,13 @@ def extract_congestion():
             )
 
             if (
+
                 value is not None
+
                 and 0 <= value <= 1000
+
             ):
+
                 return round(
                     value,
                     6
@@ -1274,15 +1821,16 @@ def extract_congestion():
             r"total\s+overflow\s*[:=]\s*0",
 
             r"\boverflow\s*[:=]\s*0",
-
         ]
 
         return any(
+
             re.search(
                 pattern,
                 text,
                 re.I
             )
+
             for pattern in patterns
         )
 
@@ -1358,7 +1906,6 @@ def extract_congestion():
         OPENROAD_LOG
     )
 
-    # Only use routing-specific lines.
     value = parse_congestion_value(
         text
     )
@@ -1367,8 +1914,8 @@ def extract_congestion():
 
         print(
             "[INFO] Congestion extracted "
-            f"from routing lines in openroad_log.txt: "
-            f"{value}"
+            "from routing lines in "
+            f"openroad_log.txt: {value}"
         )
 
         return value
@@ -1409,8 +1956,11 @@ def extract_scalar_report(
         return None
 
     pattern = (
+
         rf"\b{re.escape(metric_name)}\b"
+
         rf"\s*[:=]?\s*"
+
         rf"(-?(?:\d+(?:\.\d*)?|\.\d+)"
         rf"(?:[eE][+-]?\d+)?)"
     )
@@ -1440,9 +1990,13 @@ def parse_timing_report():
     )
 
     result = {
+
         "WNS": None,
+
         "TNS": None,
+
         "logic_depth": None,
+
         "crit_path_wirelength": None,
     }
 
@@ -1468,8 +2022,11 @@ def parse_timing_report():
     for pattern in patterns:
 
         values = re.findall(
+
             pattern,
+
             text,
+
             re.I
         )
 
@@ -1482,6 +2039,7 @@ def parse_timing_report():
                 )
 
                 if parsed is not None:
+
                     slack_values.append(
                         parsed
                     )
@@ -1492,20 +2050,28 @@ def parse_timing_report():
     if slack_values:
 
         result["WNS"] = round(
+
             min(slack_values),
+
             6
         )
 
         negative = [
+
             value
-            for value in slack_values
+
+            for value
+            in slack_values
+
             if value < 0
         ]
 
         result["TNS"] = round(
+
             sum(negative)
             if negative
             else 0.0,
+
             6
         )
 
@@ -1514,28 +2080,39 @@ def parse_timing_report():
     # ============================================================
 
     path_blocks = re.split(
+
         r"(?=Startpoint:)",
+
         text,
+
         flags=re.I
     )
 
     worst_block = None
+
     worst_slack = None
 
     for block in path_blocks:
 
         if not re.search(
+
             r"Startpoint:",
+
             block,
+
             re.I
         ):
+
             continue
 
         matches = re.findall(
+
             r"([-+]?\d+(?:\.\d+)?)"
             r"\s+slack\s+"
             r"\((?:VIOLATED|MET)\)",
+
             block,
+
             re.I
         )
 
@@ -1550,11 +2127,15 @@ def parse_timing_report():
             continue
 
         if (
+
             worst_slack is None
+
             or slack < worst_slack
+
         ):
 
             worst_slack = slack
+
             worst_block = block
 
     if worst_block is None:
@@ -1565,12 +2146,14 @@ def parse_timing_report():
     # ============================================================
 
     cell_pattern = re.compile(
+
         r"([A-Za-z0-9_$.\[\]/-]+)"
         r"/[A-Za-z0-9_$.\[\]-]+"
         r"\s+\("
         r"(?:sky130_fd_sc_hd__)?"
         r"([A-Za-z0-9_]+)"
         r"\)",
+
         re.I
     )
 
@@ -1580,12 +2163,12 @@ def parse_timing_report():
         worst_block
     ):
 
-        cells.append(
-            {
-                "inst": inst,
-                "master": master.lower(),
-            }
-        )
+        cells.append({
+
+            "inst": inst,
+
+            "master": master.lower(),
+        })
 
     # ============================================================
     # Logic depth
@@ -1596,8 +2179,11 @@ def parse_timing_report():
     for cell in cells:
 
         if not re.search(
+
             r"(dff|dfr|dfb|dfx|dlr|dlh|latch)",
+
             cell["master"],
+
             re.I
         ):
 
@@ -1607,7 +2193,9 @@ def parse_timing_report():
 
     if combinational_cells:
 
-        result["logic_depth"] = len(
+        result[
+            "logic_depth"
+        ] = len(
             combinational_cells
         )
 
@@ -1615,9 +2203,13 @@ def parse_timing_report():
     # Critical path physical distance
     # ============================================================
 
-    components = parse_def(
+    def_data = parse_def(
         FINAL_DEF
-    )["components"]
+    )
+
+    components = def_data[
+        "components"
+    ]
 
     path_points = []
 
@@ -1633,6 +2225,7 @@ def parse_timing_report():
         ]
 
         path_points.append(
+
             (
                 c["x"],
                 c["y"]
@@ -1657,14 +2250,18 @@ def parse_timing_report():
             ]
 
             distance_dbu += (
+
                 abs(x2 - x1)
+
                 + abs(y2 - y1)
             )
 
         result[
             "crit_path_wirelength"
         ] = round(
+
             distance_dbu / 1000.0,
+
             6
         )
 
@@ -1684,17 +2281,22 @@ def parse_hold_timing():
     if not text.strip():
 
         return {
+
             "hold_WNS": None,
+
             "hold_TNS": None,
         }
 
     slack_values = []
 
     values = re.findall(
+
         r"([-+]?\d+(?:\.\d+)?)"
         r"\s+slack\s+"
         r"\((?:VIOLATED|MET)\)",
+
         text,
+
         re.I
     )
 
@@ -1705,6 +2307,7 @@ def parse_hold_timing():
         )
 
         if parsed is not None:
+
             slack_values.append(
                 parsed
             )
@@ -1712,22 +2315,57 @@ def parse_hold_timing():
     if not slack_values:
 
         return {
+
             "hold_WNS": None,
+
             "hold_TNS": None,
         }
 
+    negative_values = [
+
+        v
+
+        for v in slack_values
+
+        if v < 0
+    ]
+
+    hold_wns = min(
+        slack_values
+    )
+
+    hold_tns = sum(
+        negative_values
+    )
+
+    print(
+        "[INFO] Hold timing:"
+    )
+
+    print(
+        f"       slack values found = "
+        f"{len(slack_values)}"
+    )
+
+    print(
+        f"       hold WNS            = "
+        f"{hold_wns}"
+    )
+
+    print(
+        f"       hold TNS            = "
+        f"{hold_tns}"
+    )
+
     return {
+
         "hold_WNS": round(
-            min(slack_values),
+            hold_wns,
             6
         ),
 
         "hold_TNS": round(
-            sum(
-                v
-                for v in slack_values
-                if v < 0
-            ),
+            hold_tns,
             6
         ),
     }
@@ -1739,9 +2377,17 @@ def parse_hold_timing():
 
 def main():
 
-    print("=" * 70)
-    print("FEATURE EXTRACTION")
-    print("=" * 70)
+    print(
+        "=" * 70
+    )
+
+    print(
+        "FEATURE EXTRACTION"
+    )
+
+    print(
+        "=" * 70
+    )
 
     print(
         f"Run tag : {RUN_TAG}"
@@ -1786,8 +2432,53 @@ def main():
     # DEF
     # ============================================================
 
+    print("")
+    print(
+        "Parsing final.def..."
+    )
+
     def_data = parse_def(
         FINAL_DEF
+    )
+
+    print(
+        f"[INFO] Cells          : "
+        f"{def_data['num_cells']}"
+    )
+
+    print(
+        f"[INFO] Nets           : "
+        f"{def_data['num_nets']}"
+    )
+
+    print(
+        f"[INFO] Top-level pins : "
+        f"{def_data['num_pins']}"
+    )
+
+    print(
+        f"[INFO] Instance pins  : "
+        f"{def_data['num_instance_pins']}"
+    )
+
+    print(
+        f"[INFO] Registers      : "
+        f"{def_data['num_registers']}"
+    )
+
+    print(
+        f"[INFO] Buffers        : "
+        f"{def_data['num_buffers']}"
+    )
+
+    print(
+        f"[INFO] Die area       : "
+        f"{def_data['die_area_um2']}"
+    )
+
+    print(
+        f"[INFO] DEF via types  : "
+        f"{len(def_data['via_names'])}"
     )
 
     # ============================================================
@@ -1856,7 +2547,10 @@ def main():
 
     timing = parse_timing_report()
 
+    # ------------------------------------------------------------
     # Authoritative WNS.
+    # ------------------------------------------------------------
+
     setup_wns = extract_scalar_report(
         WNS_SETUP,
         "wns"
@@ -1869,7 +2563,10 @@ def main():
             6
         )
 
+    # ------------------------------------------------------------
     # Authoritative TNS.
+    # ------------------------------------------------------------
+
     setup_tns = extract_scalar_report(
         TNS_SETUP,
         "tns"
@@ -1894,6 +2591,10 @@ def main():
 
     features = {
 
+        # --------------------------------------------------------
+        # Environment
+        # --------------------------------------------------------
+
         "run_tag":
             RUN_TAG,
 
@@ -1903,7 +2604,9 @@ def main():
         "data_width":
             env["data_width"],
 
-        # ---------------- CORE 17 ----------------
+        # --------------------------------------------------------
+        # CORE FEATURES
+        # --------------------------------------------------------
 
         "max_density":
             placement["max_density"],
@@ -1956,7 +2659,9 @@ def main():
         "clock_period":
             env["clock_period"],
 
-        # ---------------- ADDITIONAL PD ----------------
+        # --------------------------------------------------------
+        # ADDITIONAL PHYSICAL DESIGN FEATURES
+        # --------------------------------------------------------
 
         "wirelength_um":
             routing["wirelength_um"],
@@ -1979,59 +2684,98 @@ def main():
         "num_nets":
             def_data["num_nets"],
 
-        # Top-level IO pins.
         "num_pins":
             def_data["num_pins"],
 
         "num_buffers":
             def_data["num_buffers"],
+
+        # --------------------------------------------------------
+        # ROUTING DIAGNOSTICS
+        # --------------------------------------------------------
+
+        "route_segment_count":
+            routing["route_segment_count"],
+
+        "routing_geometry_available":
+            routing[
+                "routing_geometry_available"
+            ],
+
+        "wirelength_source":
+            routing["wirelength_source"],
     }
 
     # ============================================================
-    # Availability
+    # AVAILABILITY
     # ============================================================
 
     wirelength_available = (
-        features["wirelength_um"]
-        is not None
+
+        features[
+            "wirelength_um"
+        ] is not None
+
+        and
+        features[
+            "routing_geometry_available"
+        ]
     )
 
     via_count_available = (
-        features["via_count"]
-        is not None
+
+        features[
+            "via_count"
+        ] is not None
+
+        and
+        features[
+            "routing_geometry_available"
+        ]
     )
 
     congestion_available = (
-        features["congestion"]
-        is not None
+
+        features[
+            "congestion"
+        ] is not None
     )
 
     timing_available = (
+
         features["WNS"] is not None
-        and features["TNS"] is not None
+
+        and
+
+        features["TNS"] is not None
     )
 
     # ============================================================
-    # Required fields
+    # REQUIRED FEATURES
     # ============================================================
 
     required_features = [
 
         "max_density",
+
         "mean_density",
+
         "std_density",
 
         "pin_density",
 
         "avg_fanout",
+
         "max_fanout",
 
         "x_spread",
+
         "y_spread",
 
         "num_registers",
 
         "logic_depth",
+
         "crit_path_wirelength",
 
         "estimated_wirelength",
@@ -2039,30 +2783,59 @@ def main():
         "congestion",
 
         "WNS",
+
         "TNS",
 
         "utilization",
+
         "clock_period",
 
         "wirelength_um",
+
         "via_count",
+
         "routed_net_count",
     ]
 
     missing_required = [
 
         name
-        for name in required_features
-        if features.get(name) is None
 
+        for name
+        in required_features
+
+        if features.get(name) is None
     ]
+
+    # ------------------------------------------------------------
+    # Routing-specific validity check.
+    #
+    # wirelength_um = 0 is not accepted as valid.
+    # It must come from actual report data or routed geometry.
+    # ------------------------------------------------------------
+
+    if not routing[
+        "routing_geometry_available"
+    ]:
+
+        if "wirelength_um" not in missing_required:
+
+            missing_required.append(
+                "routing_geometry"
+            )
+
+        if "via_count" not in missing_required:
+
+            missing_required.append(
+                "routing_geometry"
+            )
 
     valid_run = (
         len(missing_required) == 0
     )
 
     # ============================================================
-    # Metadata
+    # METADATA
     # ============================================================
 
     features[
@@ -2090,7 +2863,7 @@ def main():
     ] = missing_required
 
     # ============================================================
-    # Write
+    # WRITE JSON
     # ============================================================
 
     with open(
@@ -2106,40 +2879,64 @@ def main():
         )
 
     # ============================================================
-    # Report
+    # REPORT
     # ============================================================
 
-    print("=" * 70)
-    print("FEATURE EXTRACTION COMPLETE")
-    print("=" * 70)
+    print("")
+    print(
+        "=" * 70
+    )
+
+    print(
+        "FEATURE EXTRACTION COMPLETE"
+    )
+
+    print(
+        "=" * 70
+    )
 
     print(
         f"Output: {OUTPUT_FILE}"
     )
 
-    print()
+    print("")
 
     for key, value in features.items():
 
         print(
-            f"{key:<30}: {value}"
+            f"{key:<35}: {value}"
         )
 
-    print()
+    print("")
 
     if valid_run:
 
-        print("=" * 70)
-        print("[SUCCESS] VALID RUN")
+        print(
+            "=" * 70
+        )
+
+        print(
+            "[SUCCESS] VALID RUN"
+        )
+
         print(
             "All required features are available."
         )
-        print("=" * 70)
+
+        print(
+            "=" * 70
+        )
 
     else:
 
-        print("=" * 70)
-        print("[WARNING] INVALID RUN")
+        print(
+            "=" * 70
+        )
+
+        print(
+            "[WARNING] INVALID RUN"
+        )
+
         print(
             "Missing required features:"
         )
@@ -2150,7 +2947,9 @@ def main():
                 f"  - {feature}"
             )
 
-        print("=" * 70)
+        print(
+            "=" * 70
+        )
 
 
 # ================================================================
@@ -2158,4 +2957,5 @@ def main():
 # ================================================================
 
 if __name__ == "__main__":
+
     main()

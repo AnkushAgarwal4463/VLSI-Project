@@ -803,7 +803,6 @@ jobs:
             design_area.rpt \
             placement_area.rpt \
             cell_usage.rpt \
-            wirelength_global.rpt \
             wirelength_detailed.rpt \
             wirelength_final.rpt \
             congestion.rpt \
@@ -843,7 +842,6 @@ jobs:
           echo ""
           echo "Searching entire workspace:"
           find . -type f \( \
-            -name "wirelength_global.rpt" -o \
             -name "wirelength_detailed.rpt" -o \
             -name "wirelength_final.rpt" -o \
             -name "congestion.rpt" -o \
@@ -851,6 +849,26 @@ jobs:
           \) -print
           
           echo "=============================================="
+          echo "=============================================="
+          echo "GLOBAL ROUTE REPORT"
+          echo "=============================================="
+          
+          if [ -f "systolic_project/runs/${RUN_TAG}/global_route.rpt" ]; then
+            cat "systolic_project/runs/${RUN_TAG}/global_route.rpt"
+          else
+            echo "global_route.rpt NOT FOUND"
+          fi
+          
+          echo ""
+          echo "=============================================="
+          echo "ROUTE STATUS"
+          echo "=============================================="
+          
+          if [ -f "systolic_project/runs/${RUN_TAG}/route_status_final.rpt" ]; then
+            cat "systolic_project/runs/${RUN_TAG}/route_status_final.rpt"
+          else
+            echo "route_status_final.rpt NOT FOUND"
+          fi
       # ================================================================
       # FEATURE EXTRACTION
       # ================================================================

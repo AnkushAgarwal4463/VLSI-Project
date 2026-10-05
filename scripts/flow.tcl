@@ -326,13 +326,34 @@ set route_guide \
 set congestion_report \
     "${run_dir}/congestion.rpt"
 
+set global_route_log \
+    "${run_dir}/global_route.rpt"
+
+# Remove stale files from previous runs
+foreach f [list $route_guide $congestion_report $global_route_log] {
+    if {[file exists $f]} {
+        file delete -force $f
+    }
+}
+
+puts "\[INFO\] Starting OpenROAD global router..."
+
+# Capture the complete global-router output.
+# The congestion summary is printed to the OpenROAD log even when
+# congestion.rpt itself is empty because there is no overflow.
 if {[catch {
-    global_route \
-        -guide_file $route_guide \
-        -congestion_report_file $congestion_report \
-        -congestion_report_iter_step 1 \
-        -congestion_iterations 100 \
-        -verbose
+
+    tee -file $global_route_log {
+
+        global_route \
+            -guide_file $route_guide \
+            -congestion_report_file $congestion_report \
+            -congestion_report_iter_step 1 \
+            -congestion_iterations 100 \
+            -verbose
+
+    }
+
 } err]} {
 
     puts "\[ERROR\] Global routing failed:"
@@ -351,12 +372,47 @@ if {![file exists $route_guide]} {
     exit 1
 }
 
+if {[file size $route_guide] <= 0} {
+    puts "\[ERROR\] route.guide is empty."
+    exit 1
+}
+
 puts "\[OK\] route.guide generated: [file size $route_guide] bytes"
 
-if {[file exists $congestion_report]} {
-    puts "\[INFO\] congestion.rpt generated: [file size $congestion_report] bytes"
+# Global router output is the authoritative source for the final
+# congestion summary.
+if {[file exists $global_route_log]} {
+
+    set gr_size [file size $global_route_log]
+
+    puts "\[INFO\] global_route.rpt generated: $gr_size bytes"
+
+    if {$gr_size <= 0} {
+        puts "\[ERROR\] global_route.rpt is empty."
+        exit 1
+    }
+
 } else {
-    puts "\[WARNING\] congestion.rpt was not generated."
+
+    puts "\[ERROR\] global_route.rpt was not generated."
+    exit 1
+}
+
+# congestion.rpt contains overflowing GCells only.
+# It may legitimately be empty when there is no overflow.
+if {[file exists $congestion_report]} {
+
+    set cong_size [file size $congestion_report]
+
+    if {$cong_size > 0} {
+        puts "\[OK\] congestion.rpt generated: $cong_size bytes"
+    } else {
+        puts "\[INFO\] congestion.rpt is empty: no overflowing GCells reported."
+    }
+
+} else {
+
+    puts "\[INFO\] congestion.rpt was not populated because no overflowing GCells were reported."
 }
 
 # ----------------------------------------------------------------------
@@ -365,50 +421,39 @@ if {[file exists $congestion_report]} {
 
 puts "\[INFO\] Writing global route segments..."
 
+set global_route_segments \
+    "${run_dir}/global_route_segments.txt"
+
+if {[file exists $global_route_segments]} {
+    file delete -force $global_route_segments
+}
+
 if {[catch {
+
     write_global_route_segments \
-        "${run_dir}/global_route_segments.txt"
+        $global_route_segments
+
 } err]} {
 
     puts "\[WARNING\] Global route segment export failed:"
     puts "$err"
-}
-
-# ----------------------------------------------------------------------
-# 15. Global-route wirelength
-#
-# IMPORTANT:
-# This OpenROAD build may require an explicit -net list for
-# report_wire_length. Therefore we pass all design nets explicitly.
-# ----------------------------------------------------------------------
-
-puts "\[INFO\] Measuring global-route wirelength..."
-
-set all_nets [get_nets *]
-
-puts "\[INFO\] Number of nets supplied to wirelength report: [llength $all_nets]"
-
-if {[catch {
-    report_wire_length \
-        -net $all_nets \
-        -global_route \
-        -verbose \
-        -file "${run_dir}/wirelength_global.rpt"
-} err]} {
-
-    puts "\[WARNING\] Global-route wirelength report failed:"
-    puts "$err"
-}
-
-if {[file exists "${run_dir}/wirelength_global.rpt"]} {
-
-    set wl_size [file size "${run_dir}/wirelength_global.rpt"]
-
-    puts "\[INFO\] wirelength_global.rpt generated: $wl_size bytes"
 
 } else {
 
-    puts "\[WARNING\] wirelength_global.rpt was not generated."
+    if {[file exists $global_route_segments]} {
+
+        set grs_size [file size $global_route_segments]
+
+        if {$grs_size > 0} {
+            puts "\[OK\] global_route_segments.txt generated: $grs_size bytes"
+        } else {
+            puts "\[WARNING\] global_route_segments.txt is empty."
+        }
+
+    } else {
+
+        puts "\[WARNING\] global_route_segments.txt was not generated."
+    }
 }
 
 # ----------------------------------------------------------------------

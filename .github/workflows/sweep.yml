@@ -938,7 +938,7 @@ jobs:
           fi
 
 
-  # ================================================================
+    # ================================================================
   # JOB 3: Aggregate
   # ================================================================
   aggregate-results:
@@ -971,7 +971,7 @@ jobs:
       - name: Download all result artifacts
         uses: actions/download-artifact@v4
         with:
-          path: downloaded_artifacts
+          path: systolic_project/runs
           merge-multiple: true
 
 
@@ -980,10 +980,38 @@ jobs:
         run: |
 
           echo "Downloaded files:"
-          find downloaded_artifacts \
+          find systolic_project/runs \
             -type f \
             -print \
             | sort
+
+
+      - name: Verify feature files
+        shell: bash
+        run: |
+
+          set -euo pipefail
+
+          echo "Searching for feature JSON files..."
+
+          find systolic_project/runs \
+            -type f \
+            \( -name "features.json" -o -name "*_features.json" \) \
+            -print \
+            | sort
+
+          COUNT=$(find systolic_project/runs \
+            -type f \
+            \( -name "features.json" -o -name "*_features.json" \) \
+            | wc -l)
+
+          echo
+          echo "Feature JSON count: $COUNT"
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "ERROR: No feature JSON files found."
+            exit 1
+          fi
 
 
       - name: Combine JSON features into CSV
@@ -992,12 +1020,10 @@ jobs:
 
           set -euo pipefail
 
-          /usr/bin/mkdir -p summary_output
+          /usr/bin/mkdir -p \
+            systolic_project/summary_output
 
-          python3 scripts/aggregate_dataset.py \
-            --runs_dir downloaded_artifacts \
-            --output_csv \
-            summary_output/systolic_array_sweep_dataset.csv
+          python3 scripts/aggregate_dataset.py
 
 
       - name: Verify CSV
@@ -1006,7 +1032,7 @@ jobs:
 
           set -euo pipefail
 
-          CSV="summary_output/systolic_array_sweep_dataset.csv"
+          CSV="systolic_project/summary_output/dataset.csv"
 
           test -f "$CSV"
 
@@ -1020,6 +1046,56 @@ jobs:
           ROWS=$(tail -n +2 "$CSV" | wc -l)
 
           echo "Rows generated: $ROWS"
+
+          if [ "$ROWS" -eq 0 ]; then
+            echo "ERROR: Dataset contains zero rows."
+            exit 1
+          fi
+
+
+      - name: Verify 19-column schema
+        shell: bash
+        run: |
+
+          set -euo pipefail
+
+          CSV="systolic_project/summary_output/dataset.csv"
+
+          HEADER=$(head -n 1 "$CSV")
+
+          EXPECTED="array_size,data_width,utilization,clock_period,max_density,mean_density,std_density,pin_density,avg_fanout,max_fanout,x_spread,y_spread,num_registers,logic_depth,crit_path_wirelength,estimated_wirelength,congestion,WNS,TNS"
+
+          echo "Actual header:"
+          echo "$HEADER"
+
+          echo
+          echo "Expected header:"
+          echo "$EXPECTED"
+
+          if [ "$HEADER" != "$EXPECTED" ]; then
+            echo
+            echo "ERROR: CSV does not contain the expected 19 columns."
+            exit 1
+          fi
+
+          echo
+          echo "19-column schema verified."
+
+
+      - name: Prepare final dataset artifact
+        shell: bash
+        run: |
+
+          set -euo pipefail
+
+          mkdir -p summary_output
+
+          cp \
+            systolic_project/summary_output/dataset.csv \
+            summary_output/systolic_array_sweep_dataset.csv
+
+          test -f \
+            summary_output/systolic_array_sweep_dataset.csv
 
 
       - name: Upload Aggregated CSV Dataset
@@ -1038,7 +1114,7 @@ jobs:
           echo "### Aggregate Dataset Summary" \
             >> "$GITHUB_STEP_SUMMARY"
 
-          CSV="summary_output/systolic_array_sweep_dataset.csv"
+          CSV="systolic_project/summary_output/dataset.csv"
 
           if [ -f "$CSV" ]; then
 
@@ -1053,11 +1129,12 @@ jobs:
             echo "- Expected full sweep: 72" \
               >> "$GITHUB_STEP_SUMMARY"
 
+            echo "- ML features: 19" \
+              >> "$GITHUB_STEP_SUMMARY"
+
           else
 
             echo "- Dataset generated: NO" \
               >> "$GITHUB_STEP_SUMMARY"
 
           fi
-
-

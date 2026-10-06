@@ -937,8 +937,7 @@ jobs:
               >> "$GITHUB_STEP_SUMMARY"
           fi
 
-
-    # ================================================================
+            # ================================================================
   # JOB 3: Aggregate
   # ================================================================
   aggregate-results:
@@ -978,7 +977,6 @@ jobs:
       - name: Show downloaded files
         shell: bash
         run: |
-
           echo "Downloaded files:"
           find systolic_project/runs \
             -type f \
@@ -1138,3 +1136,4 @@ jobs:
               >> "$GITHUB_STEP_SUMMARY"
 
           fi
+

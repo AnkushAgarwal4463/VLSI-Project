@@ -1,27 +1,56 @@
-```python
 import os
-import glob
+import sys
 import json
-import pandas as pd
+import math
+import csv
+from pathlib import Path
 
 
-# ================================================================
-# EXACT 17-COLUMN DATASET SCHEMA
-# ================================================================
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
+# Directory containing all sweep runs
+RUNS_DIR = Path("systolic_project/runs")
+
+# Final ML dataset
+OUTPUT_CSV = Path("systolic_project/summary_output/dataset.csv")
+
+
+# ============================================================
+# FINAL ML DATASET SCHEMA
+# ============================================================
 #
-# These fields match the current extract_features.py output.
+# 19 ML features:
 #
-# IMPORTANT:
-#   - No die area
-#   - No core area
-#   - No extra diagnostic fields
-#   - No renaming of physical-design values
+# 1.  array_size
+# 2.  data_width
+# 3.  utilization
+# 4.  clock_period
+# 5.  max_density
+# 6.  mean_density
+# 7.  std_density
+# 8.  pin_density
+# 9.  avg_fanout
+# 10. max_fanout
+# 11. x_spread
+# 12. y_spread
+# 13. num_registers
+# 14. logic_depth
+# 15. crit_path_wirelength
+# 16. estimated_wirelength
+# 17. congestion
+# 18. WNS
+# 19. TNS
 #
-# ================================================================
+# run_tag is retained internally for deduplication only.
+# ============================================================
 
 FEATURE_COLUMNS = [
     "array_size",
     "data_width",
+    "utilization",
+    "clock_period",
     "max_density",
     "mean_density",
     "std_density",
@@ -39,771 +68,512 @@ FEATURE_COLUMNS = [
     "TNS",
 ]
 
-
-# ================================================================
-# REQUIRED FIELDS
-# ================================================================
-#
-# Every valid feature JSON must contain all 17 fields.
-#
-# run_tag is required for identification but is NOT included
-# as one of the 17 ML feature columns.
-#
-# ================================================================
-
-REQUIRED_FIELDS = [
-    "run_tag",
-    "array_size",
-    "data_width",
-    "max_density",
-    "mean_density",
-    "std_density",
-    "pin_density",
-    "avg_fanout",
-    "max_fanout",
-    "x_spread",
-    "y_spread",
-    "num_registers",
-    "logic_depth",
-    "crit_path_wirelength",
-    "estimated_wirelength",
-    "congestion",
-    "WNS",
-    "TNS",
-]
+REQUIRED_FIELDS = FEATURE_COLUMNS + ["run_tag"]
 
 
-# ================================================================
-# NUMERIC COLUMNS
-# ================================================================
+# ============================================================
+# DIRECTORIES / FILES TO IGNORE
+# ============================================================
 
-INTEGER_COLUMNS = [
-    "array_size",
-    "data_width",
-    "max_fanout",
-    "num_registers",
-    "logic_depth",
-]
-
-FLOAT_COLUMNS = [
-    "max_density",
-    "mean_density",
-    "std_density",
-    "pin_density",
-    "avg_fanout",
-    "x_spread",
-    "y_spread",
-    "crit_path_wirelength",
-    "estimated_wirelength",
-    "congestion",
-    "WNS",
-    "TNS",
-]
+IGNORED_DIRS = {
+    ".git",
+    ".github",
+    "__pycache__",
+    "node_modules",
+    "venv",
+    ".venv",
+    "summary_output",
+}
 
 
-# ================================================================
-# FIND FEATURE JSON FILES
-# ================================================================
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
 
-def find_feature_files():
-
-    print("[INFO] Searching recursively for feature JSON files...")
-
-    search_roots = [
-        "systolic_project/runs",
-        "runs",
-        ".",
-    ]
-
-    patterns = [
-        "**/features.json",
-        "**/*_features.json",
-    ]
-
-    ignored_dirs = {
-        ".git",
-        ".github",
-        "__pycache__",
-        "node_modules",
-        "venv",
-        ".venv",
-        "summary_output",
-    }
-
-    found_files = set()
-
-    for root in search_roots:
-
-        if not os.path.exists(root):
-            continue
-
-        for pattern in patterns:
-
-            full_pattern = os.path.join(
-                root,
-                pattern
-            )
-
-            for path in glob.glob(
-                full_pattern,
-                recursive=True
-            ):
-
-                path = os.path.normpath(path)
-
-                if not os.path.isfile(path):
-                    continue
-
-                parts = path.split(os.sep)
-
-                if any(
-                    directory in ignored_dirs
-                    for directory in parts
-                ):
-                    continue
-
-                found_files.add(path)
-
-    return sorted(found_files)
-
-
-# ================================================================
-# VALIDATE FEATURE JSON
-# ================================================================
-
-def validate_feature_json(data, filepath):
-
-    # ------------------------------------------------------------
-    # JSON must be a dictionary
-    # ------------------------------------------------------------
-
-    if not isinstance(data, dict):
-
-        print(
-            f"[ERROR] Invalid JSON structure: {filepath}"
-        )
-
+def is_number(value):
+    """
+    Return True only for valid finite numeric values.
+    Reject None, strings, NaN and infinity.
+    """
+    if isinstance(value, bool):
         return False
 
+    if isinstance(value, (int, float)):
+        return math.isfinite(float(value))
 
-    # ------------------------------------------------------------
-    # Check required fields
-    # ------------------------------------------------------------
+    return False
+
+
+def find_feature_files(root_dir):
+    """
+    Recursively find:
+        features.json
+        *_features.json
+
+    while ignoring irrelevant directories.
+    """
+
+    feature_files = []
+
+    if not root_dir.exists():
+        return feature_files
+
+    for current_root, dirs, files in os.walk(root_dir):
+
+        # Prevent traversal into ignored directories
+        dirs[:] = [
+            d for d in dirs
+            if d not in IGNORED_DIRS
+        ]
+
+        for filename in files:
+            if filename == "features.json" or filename.endswith("_features.json"):
+                feature_files.append(
+                    Path(current_root) / filename
+                )
+
+    return sorted(feature_files)
+
+
+def load_json(path):
+    """
+    Load a JSON file safely.
+    """
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    except json.JSONDecodeError as exc:
+        print(
+            f"[ERROR] Invalid JSON: {path}\n"
+            f"        {exc}"
+        )
+        return None
+
+    except OSError as exc:
+        print(
+            f"[ERROR] Could not read: {path}\n"
+            f"        {exc}"
+        )
+        return None
+
+
+def validate_feature_record(data, path):
+    """
+    Validate that all required fields exist and contain
+    usable values.
+    """
+
+    if not isinstance(data, dict):
+        print(f"[ERROR] JSON root is not an object: {path}")
+        return False
 
     missing = []
 
     for field in REQUIRED_FIELDS:
-
         if field not in data:
-
             missing.append(field)
-
-        elif data[field] is None:
-
-            missing.append(field)
-
 
     if missing:
-
         print(
-            f"[WARNING] Skipping {filepath}"
+            f"[ERROR] Missing required fields in {path}:\n"
+            f"        {', '.join(missing)}"
         )
-
-        print(
-            f"         Missing fields: {missing}"
-        )
-
         return False
 
+    # run_tag must be a non-empty string
+    if not isinstance(data["run_tag"], str) or not data["run_tag"].strip():
+        print(
+            f"[ERROR] Invalid run_tag in {path}"
+        )
+        return False
 
-    # ------------------------------------------------------------
-    # Respect valid_run from extractor
-    # ------------------------------------------------------------
+    # All ML features must be finite numbers
+    invalid = []
 
-    if "valid_run" in data:
+    for field in FEATURE_COLUMNS:
+        if not is_number(data[field]):
+            invalid.append(field)
 
-        if data["valid_run"] is not True:
-
-            print(
-                f"[WARNING] Skipping invalid run: "
-                f"{data.get('run_tag', filepath)}"
-            )
-
-            missing_required = data.get(
-                "missing_required_features",
-                []
-            )
-
-            if missing_required:
-
-                print(
-                    f"         Missing required features: "
-                    f"{missing_required}"
-                )
-
-            return False
-
-
-    # ------------------------------------------------------------
-    # Explicitly verify the 17 values are numeric
-    # ------------------------------------------------------------
-
-    for field in INTEGER_COLUMNS:
-
-        try:
-
-            int(data[field])
-
-        except (ValueError, TypeError):
-
-            print(
-                f"[WARNING] Non-numeric value for "
-                f"{field} in {filepath}"
-            )
-
-            return False
-
-
-    for field in FLOAT_COLUMNS:
-
-        try:
-
-            float(data[field])
-
-        except (ValueError, TypeError):
-
-            print(
-                f"[WARNING] Non-numeric value for "
-                f"{field} in {filepath}"
-            )
-
-            return False
-
+    if invalid:
+        print(
+            f"[ERROR] Invalid/non-numeric values in {path}:\n"
+            f"        {', '.join(invalid)}"
+        )
+        return False
 
     return True
 
 
-# ================================================================
-# BUILD ONE DATASET RECORD
-# ================================================================
+def check_valid_run(data, path):
+    """
+    Respect the extractor's valid_run flag.
 
-def build_record(data):
+    If valid_run exists and is False, reject the record.
+
+    If the field does not exist, allow the record because
+    older feature files may not contain it.
+    """
+
+    if "valid_run" in data:
+
+        if data["valid_run"] is False:
+            print(
+                f"[SKIP] valid_run=False: {path}"
+            )
+            return False
+
+    return True
+
+
+def normalize_record(data):
+    """
+    Extract only the 19 ML columns.
+
+    run_tag is intentionally excluded from the final CSV.
+    """
 
     record = {}
 
-    # ------------------------------------------------------------
-    # Keep run_tag internally for identification.
-    # It is NOT part of the final 17 columns.
-    # ------------------------------------------------------------
-
-    record["_run_tag"] = str(
-        data["run_tag"]
-    )
-
-
-    # ------------------------------------------------------------
-    # Copy EXACTLY the 17 requested features
-    # ------------------------------------------------------------
-
     for field in FEATURE_COLUMNS:
+        value = data[field]
 
-        record[field] = data[field]
+        # Store integers as integers where appropriate
+        if field in {
+            "array_size",
+            "data_width",
+            "max_fanout",
+            "num_registers",
+            "logic_depth",
+        }:
+            record[field] = int(value)
 
+        else:
+            record[field] = float(value)
 
     return record
 
 
-# ================================================================
+# ============================================================
 # MAIN AGGREGATION
-# ================================================================
+# ============================================================
 
-def build_clean_dataset(
-    output_csv="summary_output/systolic_array_sweep_dataset.csv"
-):
+def main():
 
     print("=" * 70)
-    print("SYSTOLIC ARRAY DATASET AGGREGATION")
+    print("SYSTOLIC ARRAY ML DATASET AGGREGATION")
     print("=" * 70)
 
+    print(f"Runs directory : {RUNS_DIR}")
+    print(f"Output CSV     : {OUTPUT_CSV}")
     print()
-    print("[INFO] Expected dataset columns:")
-    
-    for index, column in enumerate(
-        FEATURE_COLUMNS,
-        start=1
-    ):
+
+    # --------------------------------------------------------
+    # Check runs directory
+    # --------------------------------------------------------
+
+    if not RUNS_DIR.exists():
 
         print(
-            f"  {index:02d}. {column}"
+            f"[ERROR] Runs directory does not exist:\n"
+            f"        {RUNS_DIR}"
         )
 
+        return 1
 
-    # ============================================================
-    # FIND JSON FILES
-    # ============================================================
+    # --------------------------------------------------------
+    # Find feature files
+    # --------------------------------------------------------
 
-    json_files = find_feature_files()
+    feature_files = find_feature_files(RUNS_DIR)
 
-    print()
     print(
-        f"[INFO] Found {len(json_files)} feature JSON files"
+        f"[INFO] Feature files found: {len(feature_files)}"
     )
+    print()
 
-
-    # ------------------------------------------------------------
-    # NEVER overwrite CSV with an empty dataset
-    # ------------------------------------------------------------
-
-    if not json_files:
-
-        print()
-        print(
-            "[ERROR] No feature JSON files found."
-        )
+    if not feature_files:
 
         print(
-            "[ERROR] Existing CSV will NOT be overwritten."
+            "[ERROR] No feature files were found.\n"
+            "        Expected files such as:\n"
+            "        systolic_project/runs/<run_tag>/features.json"
         )
 
-        return False
+        return 1
 
+    # --------------------------------------------------------
+    # Load and validate
+    # --------------------------------------------------------
 
-    # ============================================================
-    # READ JSON FILES
-    # ============================================================
+    records_by_run_tag = {}
 
-    records = []
-
-    seen_tags = set()
-
+    valid_count = 0
     invalid_count = 0
-    duplicate_count = 0
-    parse_error_count = 0
+    skipped_count = 0
 
+    for feature_file in feature_files:
 
-    print()
-    print("[INFO] Processing feature files...")
-    print()
+        data = load_json(feature_file)
 
-
-    for filepath in json_files:
-
-        # --------------------------------------------------------
-        # Read JSON
-        # --------------------------------------------------------
-
-        try:
-
-            with open(
-                filepath,
-                "r",
-                encoding="utf-8"
-            ) as file:
-
-                data = json.load(file)
-
-
-        except json.JSONDecodeError as error:
-
-            print(
-                f"[WARNING] Invalid JSON:"
-                f" {filepath}"
-            )
-
-            print(
-                f"          {error}"
-            )
-
-            parse_error_count += 1
-
-            continue
-
-
-        except Exception as error:
-
-            print(
-                f"[WARNING] Could not read:"
-                f" {filepath}"
-            )
-
-            print(
-                f"          {error}"
-            )
-
-            parse_error_count += 1
-
-            continue
-
-
-        # --------------------------------------------------------
-        # Validate
-        # --------------------------------------------------------
-
-        if not validate_feature_json(
-            data,
-            filepath
-        ):
-
+        if data is None:
             invalid_count += 1
-
             continue
 
-
-        # --------------------------------------------------------
-        # Get run tag
-        # --------------------------------------------------------
-
-        run_tag = str(
-            data["run_tag"]
-        )
-
-
-        # --------------------------------------------------------
-        # Deduplicate
-        # --------------------------------------------------------
-
-        if run_tag in seen_tags:
-
-            print(
-                f"[WARNING] Duplicate run skipped:"
-                f" {run_tag}"
-            )
-
-            print(
-                f"          File: {filepath}"
-            )
-
-            duplicate_count += 1
-
+        # Respect valid_run
+        if not check_valid_run(data, feature_file):
+            skipped_count += 1
             continue
 
+        # Validate schema
+        if not validate_feature_record(data, feature_file):
+            invalid_count += 1
+            continue
 
-        seen_tags.add(run_tag)
+        run_tag = data["run_tag"]
 
+        # ----------------------------------------------------
+        # Deduplicate by run_tag
+        #
+        # If the same run appears more than once, the latest
+        # discovered record replaces the previous one.
+        # ----------------------------------------------------
 
-        # --------------------------------------------------------
-        # Build record
-        # --------------------------------------------------------
+        if run_tag in records_by_run_tag:
 
-        record = build_record(
-            data
+            print(
+                f"[WARNING] Duplicate run_tag detected: "
+                f"{run_tag}"
+            )
+
+        records_by_run_tag[run_tag] = (
+            data,
+            feature_file
         )
 
-        records.append(
-            record
-        )
+        valid_count += 1
 
+    # --------------------------------------------------------
+    # Safety check
+    # --------------------------------------------------------
 
-        print(
-            f"[OK] {run_tag}"
-        )
-
-
-    # ============================================================
-    # FINAL RECORD CHECK
-    # ============================================================
-
-    if not records:
+    if not records_by_run_tag:
 
         print()
-        print(
-            "[ERROR] ZERO valid records were found."
-        )
+        print("[ERROR] No valid feature records available.")
+        print("[ERROR] CSV will NOT be overwritten.")
 
-        print(
-            "[ERROR] Existing CSV will NOT be overwritten."
-        )
+        return 1
 
-        return False
+    # --------------------------------------------------------
+    # Sort runs deterministically
+    # --------------------------------------------------------
 
-
-    # ============================================================
-    # CREATE DATAFRAME
-    # ============================================================
-
-    df = pd.DataFrame(
-        records
+    sorted_runs = sorted(
+        records_by_run_tag.items(),
+        key=lambda item: item[0]
     )
 
+    # --------------------------------------------------------
+    # Prepare output directory
+    # --------------------------------------------------------
 
-    # ============================================================
-    # EXACT COLUMN SELECTION
-    # ============================================================
-    #
-    # This guarantees that the final CSV contains exactly
-    # 17 columns and nothing else.
-    #
-    # ============================================================
+    OUTPUT_CSV.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
-    df = df[
-        FEATURE_COLUMNS
-    ]
+    # --------------------------------------------------------
+    # Write CSV
+    # --------------------------------------------------------
 
+    temp_csv = OUTPUT_CSV.with_suffix(".tmp.csv")
 
-    # ============================================================
-    # FORCE NUMERIC TYPES
-    # ============================================================
+    try:
 
-    for column in INTEGER_COLUMNS:
+        with open(
+            temp_csv,
+            "w",
+            newline="",
+            encoding="utf-8"
+        ) as f:
 
-        df[column] = pd.to_numeric(
-            df[column],
-            errors="coerce"
-        ).astype("Int64")
+            writer = csv.DictWriter(
+                f,
+                fieldnames=FEATURE_COLUMNS
+            )
 
+            writer.writeheader()
 
-    for column in FLOAT_COLUMNS:
+            for run_tag, (data, source_file) in sorted_runs:
 
-        df[column] = pd.to_numeric(
-            df[column],
-            errors="coerce"
+                record = normalize_record(data)
+
+                writer.writerow(record)
+
+        # Atomic replacement
+        os.replace(
+            temp_csv,
+            OUTPUT_CSV
         )
 
+    except OSError as exc:
 
-    # ============================================================
-    # CHECK FOR NaN
-    # ============================================================
+        print(
+            f"[ERROR] Failed to write CSV:\n"
+            f"        {exc}"
+        )
 
-    if df.isna().any().any():
+        if temp_csv.exists():
+            temp_csv.unlink()
 
+        return 1
+
+    # ========================================================
+    # FINAL VERIFICATION
+    # ========================================================
+
+    print()
+    print("=" * 70)
+    print("DATASET VERIFICATION")
+    print("=" * 70)
+
+    try:
+
+        with open(
+            OUTPUT_CSV,
+            "r",
+            newline="",
+            encoding="utf-8"
+        ) as f:
+
+            reader = csv.DictReader(f)
+
+            actual_columns = reader.fieldnames or []
+
+            rows = list(reader)
+
+    except OSError as exc:
+
+        print(
+            f"[ERROR] Could not verify CSV:\n"
+            f"        {exc}"
+        )
+
+        return 1
+
+    # --------------------------------------------------------
+    # Verify columns
+    # --------------------------------------------------------
+
+    if actual_columns != FEATURE_COLUMNS:
+
+        print("[ERROR] CSV schema mismatch!")
         print()
-        print(
-            "[ERROR] NaN values detected in final dataset."
-        )
+        print("Expected:")
+        print(FEATURE_COLUMNS)
+        print()
+        print("Actual:")
+        print(actual_columns)
+
+        return 1
+
+    # --------------------------------------------------------
+    # Verify row count
+    # --------------------------------------------------------
+
+    if len(rows) == 0:
 
         print(
-            df.isna().sum()
+            "[ERROR] CSV contains zero rows."
         )
+
+        return 1
+
+    # --------------------------------------------------------
+    # Verify every value
+    # --------------------------------------------------------
+
+    invalid_cells = []
+
+    for row_index, row in enumerate(rows, start=2):
+
+        for field in FEATURE_COLUMNS:
+
+            value = row.get(field)
+
+            if value is None or value == "":
+
+                invalid_cells.append(
+                    f"row {row_index}, column {field}"
+                )
+                continue
+
+            try:
+
+                numeric_value = float(value)
+
+                if not math.isfinite(numeric_value):
+
+                    invalid_cells.append(
+                        f"row {row_index}, column {field}"
+                    )
+
+            except ValueError:
+
+                invalid_cells.append(
+                    f"row {row_index}, column {field}"
+                )
+
+    if invalid_cells:
+
+        print("[ERROR] Invalid CSV values detected:")
+
+        for item in invalid_cells[:20]:
+            print(f"        {item}")
+
+        if len(invalid_cells) > 20:
+            print(
+                f"        ... and "
+                f"{len(invalid_cells) - 20} more"
+            )
+
+        return 1
+
+    # ========================================================
+    # SUCCESS SUMMARY
+    # ========================================================
+
+    print()
+    print(f"CSV output       : {OUTPUT_CSV}")
+    print(f"Rows             : {len(rows)}")
+    print(f"Columns          : {len(actual_columns)}")
+    print(f"Valid files      : {valid_count}")
+    print(f"Skipped files    : {skipped_count}")
+    print(f"Invalid files    : {invalid_count}")
+    print()
+
+    print("FINAL ML COLUMNS:")
+    print("-" * 70)
+
+    for index, column in enumerate(FEATURE_COLUMNS, start=1):
 
         print(
-            "[ERROR] CSV will NOT be written."
+            f"{index:2d}. {column}"
         )
-
-        return False
-
-
-    # ============================================================
-    # SORT DATASET
-    # ============================================================
-
-    sort_columns = [
-        "array_size",
-        "data_width",
-        "utilization",
-        # utilization is NOT in the 17 columns,
-        # therefore sorting cannot use it.
-    ]
-
-    # ------------------------------------------------------------
-    # Since utilization and clock_period are intentionally not
-    # part of the 17-column dataset, sort only by the available
-    # design dimensions.
-    # ------------------------------------------------------------
-
-    sort_columns = [
-        "array_size",
-        "data_width",
-    ]
-
-    df = df.sort_values(
-        by=sort_columns,
-        kind="stable"
-    ).reset_index(
-        drop=True
-    )
-
-
-    # ============================================================
-    # OUTPUT DIRECTORY
-    # ============================================================
-
-    output_dir = os.path.dirname(
-        output_csv
-    )
-
-    if output_dir:
-
-        os.makedirs(
-            output_dir,
-            exist_ok=True
-        )
-
-
-    # ============================================================
-    # WRITE CSV
-    # ============================================================
-
-    df.to_csv(
-        output_csv,
-        index=False
-    )
-
-
-    # ============================================================
-    # VERIFY WRITTEN CSV
-    # ============================================================
-
-    if not os.path.exists(output_csv):
-
-        print(
-            "[ERROR] CSV file was not created."
-        )
-
-        return False
-
-
-    # Re-read the CSV to verify it.
-
-    verification_df = pd.read_csv(
-        output_csv
-    )
-
-
-    if len(
-        verification_df.columns
-    ) != 17:
-
-        print(
-            "[ERROR] Final CSV does not contain exactly "
-            "17 columns."
-        )
-
-        print(
-            f"         Found: "
-            f"{len(verification_df.columns)}"
-        )
-
-        return False
-
-
-    if list(
-        verification_df.columns
-    ) != FEATURE_COLUMNS:
-
-        print(
-            "[ERROR] Final CSV column order is incorrect."
-        )
-
-        print(
-            f"Expected: {FEATURE_COLUMNS}"
-        )
-
-        print(
-            f"Found:    "
-            f"{list(verification_df.columns)}"
-        )
-
-        return False
-
-
-    # ============================================================
-    # DATASET SUMMARY
-    # ============================================================
 
     print()
     print("=" * 70)
-    print("DATASET SUMMARY")
+    print("DATASET AGGREGATION SUCCESSFUL")
     print("=" * 70)
 
-    print(
-        f"JSON files discovered : {len(json_files)}"
-    )
-
-    print(
-        f"Valid records         : {len(records)}"
-    )
-
-    print(
-        f"Invalid records       : {invalid_count}"
-    )
-
-    print(
-        f"Duplicates skipped    : {duplicate_count}"
-    )
-
-    print(
-        f"JSON parse errors     : {parse_error_count}"
-    )
-
-    print(
-        f"Final CSV rows        : {len(verification_df)}"
-    )
-
-    print(
-        f"Final CSV columns     : "
-        f"{len(verification_df.columns)}"
-    )
-
-    print(
-        f"Output                : {output_csv}"
-    )
+    return 0
 
 
-    # ============================================================
-    # DESIGN SPACE COVERAGE
-    # ============================================================
-
-    print()
-    print("Design-space coverage:")
-
-    print(
-        f"  Array sizes : "
-        f"{sorted(df['array_size'].unique().tolist())}"
-    )
-
-    print(
-        f"  Data widths : "
-        f"{sorted(df['data_width'].unique().tolist())}"
-    )
-
-
-    # ============================================================
-    # FINAL SUCCESS
-    # ============================================================
-
-    print()
-    print("=" * 70)
-
-    print(
-        f"[SUCCESS] Dataset created successfully."
-    )
-
-    print(
-        f"[SUCCESS] {len(df)} rows × "
-        f"{len(df.columns)} columns"
-    )
-
-    print(
-        "[SUCCESS] Exactly 17 ML features."
-    )
-
-    print(
-        "[SUCCESS] No die_area_u2."
-    )
-
-    print(
-        "[SUCCESS] No core_area_u2."
-    )
-
-    print(
-        "[SUCCESS] No diagnostic columns."
-    )
-
-    print("=" * 70)
-
-
-    return True
-
-
-# ================================================================
+# ============================================================
 # ENTRY POINT
-# ================================================================
+# ============================================================
 
 if __name__ == "__main__":
-
-    success = build_clean_dataset()
-
-    if not success:
-
-        raise SystemExit(1)
-```
+    sys.exit(main())

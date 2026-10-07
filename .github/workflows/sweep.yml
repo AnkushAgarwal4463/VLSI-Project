@@ -851,7 +851,7 @@ jobs:
             echo "- 17-feature JSON: NO" \
               >> "$GITHUB_STEP_SUMMARY"
           fi
-  # ================================================================
+   # ================================================================
   # JOB 3: Aggregate
   # ================================================================
   aggregate-results:
@@ -868,53 +868,312 @@ jobs:
         uses: actions/checkout@v4
 
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          pip install pandas
+      # --------------------------------------------------------------
+      # Download all run artifacts
+      # --------------------------------------------------------------
       - name: Download all result artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: result-*
           path: downloaded_artifacts
           merge-multiple: true
 
 
+      # --------------------------------------------------------------
+      # Show downloaded files
+      # --------------------------------------------------------------
       - name: Show downloaded files
         shell: bash
         run: |
-          echo "Downloaded files:"
+          set -euo pipefail
+
+          echo "=============================================================="
+          echo "DOWNLOADED RUN ARTIFACTS"
+          echo "=============================================================="
+
           find downloaded_artifacts \
             -type f \
             -print \
             | sort
-      - name: Combine JSON features into CSV
+
+          echo
+          echo "=============================================================="
+          echo "FEATURE JSON FILES"
+          echo "=============================================================="
+
+          find downloaded_artifacts \
+            -type f \
+            -name "features.json" \
+            -print \
+            | sort
+
+
+      # --------------------------------------------------------------
+      # Generate CSV directly from features.json
+      # --------------------------------------------------------------
+      - name: Generate dataset CSV
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/mkdir -p summary_output
-          python3 scripts/aggregate_dataset.py \
-            --runs_dir downloaded_artifacts \
-            --output_csv \
-            summary_output/systolic_array_sweep_dataset.csv
+
+          mkdir -p summary_output
+
+          python3 <<'PY'
+          import json
+          import csv
+          import re
+          from pathlib import Path
+
+          ROOT = Path("downloaded_artifacts")
+          OUTPUT = Path("summary_output/systolic_array_sweep_dataset.csv")
+
+          COLUMNS = [
+              "array_size",
+              "data_width",
+              "utilization",
+              "clock_period",
+              "max_density",
+              "mean_density",
+              "std_density",
+              "pin_density",
+              "avg_fanout",
+              "max_fanout",
+              "x_spread",
+              "y_spread",
+              "num_registers",
+              "logic_depth",
+              "crit_path_wirelength",
+              "estimated_wirelength",
+              "congestion",
+              "WNS",
+              "TNS"
+          ]
+
+          print("=" * 70)
+          print("SYSTOLIC ARRAY ML DATASET AGGREGATION")
+          print("=" * 70)
+          print()
+          print(f"Artifact directory : {ROOT}")
+          print(f"Output CSV         : {OUTPUT}")
+          print()
+
+          if not ROOT.exists():
+              print("[ERROR] downloaded_artifacts does not exist.")
+              raise SystemExit(1)
+
+          feature_files = sorted(ROOT.rglob("features.json"))
+
+          print(f"features.json files found: {len(feature_files)}")
+          print()
+
+          if not feature_files:
+              print("[ERROR] No features.json files found.")
+              print()
+              print("Files downloaded:")
+              for p in sorted(ROOT.rglob("*")):
+                  if p.is_file():
+                      print(f"  {p}")
+              raise SystemExit(1)
+
+          rows = []
+
+          for feature_file in feature_files:
+
+              print(f"Reading: {feature_file}")
+
+              try:
+                  with feature_file.open(
+                      "r",
+                      encoding="utf-8"
+                  ) as f:
+                      data = json.load(f)
+
+              except Exception as e:
+                  print(f"  [WARNING] JSON read failed: {e}")
+                  continue
+
+              if not isinstance(data, dict):
+                  print("  [WARNING] JSON root is not an object.")
+                  continue
+
+              row = {}
+
+              # ------------------------------------------------------
+              # Copy the 19 expected fields
+              # ------------------------------------------------------
+
+              for column in COLUMNS:
+                  row[column] = data.get(column)
+
+              # ------------------------------------------------------
+              # Recover experiment parameters from run_tag
+              # ------------------------------------------------------
+
+              run_tag = data.get("run_tag")
+
+              if run_tag:
+
+                  match = re.search(
+                      r"sys(\d+)_w(\d+)_u(\d+)_clk([0-9.]+)",
+                      str(run_tag)
+                  )
+
+                  if match:
+
+                      if row["array_size"] is None:
+                          row["array_size"] = int(match.group(1))
+
+                      if row["data_width"] is None:
+                          row["data_width"] = int(match.group(2))
+
+                      if row["utilization"] is None:
+                          row["utilization"] = int(match.group(3))
+
+                      if row["clock_period"] is None:
+                          row["clock_period"] = float(match.group(4))
+
+              # ------------------------------------------------------
+              # Alternative names
+              # ------------------------------------------------------
+
+              if row["clock_period"] is None:
+                  row["clock_period"] = data.get("clk_period")
+
+              if row["utilization"] is None:
+                  row["utilization"] = data.get("util")
+
+              # ------------------------------------------------------
+              # Store row
+              # ------------------------------------------------------
+
+              rows.append(row)
+
+              print("  [OK]")
+
+          # ----------------------------------------------------------
+          # Write CSV
+          # ----------------------------------------------------------
+
+          OUTPUT.parent.mkdir(
+              parents=True,
+              exist_ok=True
+          )
+
+          with OUTPUT.open(
+              "w",
+              encoding="utf-8",
+              newline=""
+          ) as f:
+
+              writer = csv.DictWriter(
+                  f,
+                  fieldnames=COLUMNS,
+                  extrasaction="ignore"
+              )
+
+              writer.writeheader()
+              writer.writerows(rows)
+
+          print()
+          print("=" * 70)
+          print("CSV CREATED")
+          print("=" * 70)
+          print(f"Output : {OUTPUT}")
+          print(f"Rows   : {len(rows)}")
+          print(f"Columns: {len(COLUMNS)}")
+          print()
+
+          if len(rows) == 1:
+              print("[OK] Test run: 1 row generated.")
+
+          elif len(rows) == 72:
+              print("[OK] Full sweep: 72 rows generated.")
+
+          else:
+              print(
+                  f"[WARNING] {len(rows)} rows generated."
+              )
+
+          print()
+          print("CSV header:")
+          print(",".join(COLUMNS))
+
+          if len(rows) == 0:
+              print()
+              print("[ERROR] CSV contains zero rows.")
+              raise SystemExit(1)
+          PY
+
+
+      # --------------------------------------------------------------
+      # Verify CSV
+      # --------------------------------------------------------------
       - name: Verify CSV
         shell: bash
         run: |
           set -euo pipefail
+
           CSV="summary_output/systolic_array_sweep_dataset.csv"
+
+          echo "=============================================================="
+          echo "DATASET VERIFICATION"
+          echo "=============================================================="
+
           test -f "$CSV"
-          echo "Dataset:"
-          echo "--------------------------------"
+
+          echo
+          echo "CSV file:"
+          ls -lh "$CSV"
+
+          echo
+          echo "CSV preview:"
           head -n 5 "$CSV"
-          echo "--------------------------------"
+
+          echo
           ROWS=$(tail -n +2 "$CSV" | wc -l)
+
           echo "Rows generated: $ROWS"
+
+          if [ "$ROWS" -eq 0 ]; then
+            echo "[ERROR] Dataset contains zero rows."
+            exit 1
+          fi
+
+
+      # --------------------------------------------------------------
+      # Verify 19-column schema
+      # --------------------------------------------------------------
+      - name: Verify 19-column schema
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CSV="summary_output/systolic_array_sweep_dataset.csv"
+
+          EXPECTED="array_size,data_width,utilization,clock_period,max_density,mean_density,std_density,pin_density,avg_fanout,max_fanout,x_spread,y_spread,num_registers,logic_depth,crit_path_wirelength,estimated_wirelength,congestion,WNS,TNS"
+
+          ACTUAL=$(head -n 1 "$CSV" | tr -d '\r')
+
+          echo "Actual:"
+          echo "$ACTUAL"
+
+          echo
+          echo "Expected:"
+          echo "$EXPECTED"
+
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+              echo
+              echo "[ERROR] CSV does not contain the expected 19 columns."
+              exit 1
+          fi
+
+          echo
+          echo "[OK] 19-column schema verified successfully."
+
+
+      # --------------------------------------------------------------
+      # Upload final CSV
+      # --------------------------------------------------------------
       - name: Upload Aggregated CSV Dataset
         uses: actions/upload-artifact@v4
         with:
@@ -923,22 +1182,34 @@ jobs:
           if-no-files-found: error
 
 
+      # --------------------------------------------------------------
+      # Summary
+      # --------------------------------------------------------------
       - name: Aggregate summary
         if: always()
         shell: bash
         run: |
           echo "### Aggregate Dataset Summary" \
             >> "$GITHUB_STEP_SUMMARY"
+
           CSV="summary_output/systolic_array_sweep_dataset.csv"
+
           if [ -f "$CSV" ]; then
+
             COUNT=$(tail -n +2 "$CSV" | wc -l)
+
             echo "- Dataset generated: YES" \
               >> "$GITHUB_STEP_SUMMARY"
+
             echo "- Run entries: $COUNT" \
               >> "$GITHUB_STEP_SUMMARY"
+
             echo "- Expected full sweep: 72" \
               >> "$GITHUB_STEP_SUMMARY"
+
           else
+
             echo "- Dataset generated: NO" \
               >> "$GITHUB_STEP_SUMMARY"
+
           fi

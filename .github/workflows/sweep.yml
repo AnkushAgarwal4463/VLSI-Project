@@ -490,7 +490,8 @@ jobs:
 
           fi
 
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          JSON_OUT=$(printf '%s' "$MATRIX" | jq -c .)
+          printf 'matrix=%s\n' "$JSON_OUT" >> "$GITHUB_OUTPUT"
 
 
   # ================================================================

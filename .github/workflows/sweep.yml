@@ -42,7 +42,7 @@ jobs:
               "array_size": 4,
               "data_width": 8,
               "utilization": 30,
-              "clk_period": 5.0
+              "clk_period": 10.0
             }
           ]'
           FULL_MATRIX='[
@@ -50,433 +50,433 @@ jobs:
               "array_size": 4,
               "data_width": 8,
               "utilization": 20,
-              "clk_period": 2.0
+              "clk_period": 10.0
             },
             {
               "array_size": 4,
               "data_width": 8,
               "utilization": 20,
-              "clk_period": 5.0
+              "clk_period": 15.0
             },
             {
               "array_size": 4,
               "data_width": 8,
               "utilization": 30,
-              "clk_period": 2.0
+              "clk_period": 10.0
             },
             {
               "array_size": 4,
               "data_width": 8,
               "utilization": 30,
-              "clk_period": 5.0
+              "clk_period": 15.0
             },
             {
               "array_size": 4,
               "data_width": 8,
               "utilization": 40,
-              "clk_period": 2.0
+              "clk_period": 10.0
             },
             {
               "array_size": 4,
               "data_width": 8,
               "utilization": 40,
-              "clk_period": 5.0
+              "clk_period": 15.0
             },
             {
               "array_size": 4,
               "data_width": 8,
               "utilization": 50,
-              "clk_period": 2.0
+              "clk_period": 10.0
             },
             {
               "array_size": 4,
               "data_width": 8,
               "utilization": 50,
-              "clk_period": 5.0
+              "clk_period": 15.0
             },
             {
               "array_size": 4,
               "data_width": 8,
               "utilization": 60,
-              "clk_period": 2.0
+              "clk_period": 10.0
             },
             {
               "array_size": 4,
               "data_width": 8,
               "utilization": 60,
-              "clk_period": 5.0
+              "clk_period": 15.0
             },
             {
               "array_size": 4,
               "data_width": 8,
               "utilization": 70,
-              "clk_period": 2.0
+              "clk_period": 10.0
             },
             {
               "array_size": 4,
               "data_width": 8,
               "utilization": 70,
-              "clk_period": 5.0
+              "clk_period": 15.0
             },
             {
               "array_size": 4,
               "data_width": 16,
               "utilization": 20,
-              "clk_period": 2.0
+              "clk_period": 10.0
             },
             {
               "array_size": 4,
               "data_width": 16,
               "utilization": 20,
-              "clk_period": 5.0
+              "clk_period": 15.0
             },
             {
               "array_size": 4,
               "data_width": 16,
               "utilization": 30,
-              "clk_period": 2.0
+              "clk_period": 10.0
             },
             {
               "array_size": 4,
               "data_width": 16,
               "utilization": 30,
-              "clk_period": 5.0
+              "clk_period": 15.0
             },
             {
               "array_size": 4,
               "data_width": 16,
               "utilization": 40,
-              "clk_period": 2.0
+              "clk_period": 10.0
             },
             {
               "array_size": 4,
               "data_width": 16,
               "utilization": 40,
-              "clk_period": 5.0
+              "clk_period": 15.0
             },
             {
               "array_size": 4,
               "data_width": 16,
               "utilization": 50,
-              "clk_period": 2.0
+              "clk_period": 10.0
             },
             {
               "array_size": 4,
               "data_width": 16,
               "utilization": 50,
-              "clk_period": 5.0
+              "clk_period": 15.0
             },
             {
               "array_size": 4,
               "data_width": 16,
               "utilization": 60,
-              "clk_period": 2.0
+              "clk_period": 10.0
             },
             {
               "array_size": 4,
               "data_width": 16,
               "utilization": 60,
-              "clk_period": 5.0
+              "clk_period": 15.0
             },
             {
               "array_size": 4,
               "data_width": 16,
               "utilization": 70,
-              "clk_period": 2.0
+              "clk_period": 10.0
             },
             {
               "array_size": 4,
               "data_width": 16,
               "utilization": 70,
-              "clk_period": 5.0
+              "clk_period": 15.0
             },
             {
               "array_size": 8,
               "data_width": 8,
               "utilization": 20,
-              "clk_period": 2.0
+              "clk_period": 20.0
             },
             {
               "array_size": 8,
               "data_width": 8,
               "utilization": 20,
-              "clk_period": 5.0
+              "clk_period": 25.0
             },
             {
               "array_size": 8,
               "data_width": 8,
               "utilization": 30,
-              "clk_period": 2.0
+              "clk_period": 20.0
             },
             {
               "array_size": 8,
               "data_width": 8,
               "utilization": 30,
-              "clk_period": 5.0
+              "clk_period": 25.0
             },
             {
               "array_size": 8,
               "data_width": 8,
               "utilization": 40,
-              "clk_period": 2.0
+              "clk_period": 20.0
             },
             {
               "array_size": 8,
               "data_width": 8,
               "utilization": 40,
-              "clk_period": 5.0
+              "clk_period": 25.0
             },
             {
               "array_size": 8,
               "data_width": 8,
               "utilization": 50,
-              "clk_period": 2.0
+              "clk_period": 20.0
             },
             {
               "array_size": 8,
               "data_width": 8,
               "utilization": 50,
-              "clk_period": 5.0
+              "clk_period": 25.0
             },
             {
               "array_size": 8,
               "data_width": 8,
               "utilization": 60,
-              "clk_period": 2.0
+              "clk_period": 20.0
             },
             {
               "array_size": 8,
               "data_width": 8,
               "utilization": 60,
-              "clk_period": 5.0
+              "clk_period": 25.0
             },
             {
               "array_size": 8,
               "data_width": 8,
               "utilization": 70,
-              "clk_period": 2.0
+              "clk_period": 20.0
             },
             {
               "array_size": 8,
               "data_width": 8,
               "utilization": 70,
-              "clk_period": 5.0
+              "clk_period": 25.0
             },
             {
               "array_size": 8,
               "data_width": 16,
               "utilization": 20,
-              "clk_period": 2.0
+              "clk_period": 20.0
             },
             {
               "array_size": 8,
               "data_width": 16,
               "utilization": 20,
-              "clk_period": 5.0
+              "clk_period": 25.0
             },
             {
               "array_size": 8,
               "data_width": 16,
               "utilization": 30,
-              "clk_period": 2.0
+              "clk_period": 20.0
             },
             {
               "array_size": 8,
               "data_width": 16,
               "utilization": 30,
-              "clk_period": 5.0
+              "clk_period": 25.0
             },
             {
               "array_size": 8,
               "data_width": 16,
               "utilization": 40,
-              "clk_period": 2.0
+              "clk_period": 20.0
             },
             {
               "array_size": 8,
               "data_width": 16,
               "utilization": 40,
-              "clk_period": 5.0
+              "clk_period": 25.0
             },
             {
               "array_size": 8,
               "data_width": 16,
               "utilization": 50,
-              "clk_period": 2.0
+              "clk_period": 20.0
             },
             {
               "array_size": 8,
               "data_width": 16,
               "utilization": 50,
-              "clk_period": 5.0
+              "clk_period": 25.0
             },
             {
               "array_size": 8,
               "data_width": 16,
               "utilization": 60,
-              "clk_period": 2.0
+              "clk_period": 20.0
             },
             {
               "array_size": 8,
               "data_width": 16,
               "utilization": 60,
-              "clk_period": 5.0
+              "clk_period": 25.0
             },
             {
               "array_size": 8,
               "data_width": 16,
               "utilization": 70,
-              "clk_period": 2.0
+              "clk_period": 20.0
             },
             {
               "array_size": 8,
               "data_width": 16,
               "utilization": 70,
-              "clk_period": 5.0
+              "clk_period": 25.0
             },
             {
               "array_size": 16,
               "data_width": 8,
               "utilization": 20,
-              "clk_period": 2.0
+              "clk_period": 30.0
             },
             {
               "array_size": 16,
               "data_width": 8,
               "utilization": 20,
-              "clk_period": 5.0
+              "clk_period": 35.0
             },
             {
               "array_size": 16,
               "data_width": 8,
               "utilization": 30,
-              "clk_period": 2.0
+              "clk_period": 30.0
             },
             {
               "array_size": 16,
               "data_width": 8,
               "utilization": 30,
-              "clk_period": 5.0
+              "clk_period": 35.0
             },
             {
               "array_size": 16,
               "data_width": 8,
               "utilization": 40,
-              "clk_period": 2.0
+              "clk_period": 30.0
             },
             {
               "array_size": 16,
               "data_width": 8,
               "utilization": 40,
-              "clk_period": 5.0
+              "clk_period": 35.0
             },
             {
               "array_size": 16,
               "data_width": 8,
               "utilization": 50,
-              "clk_period": 2.0
+              "clk_period": 30.0
             },
             {
               "array_size": 16,
               "data_width": 8,
               "utilization": 50,
-              "clk_period": 5.0
+              "clk_period": 35.0
             },
             {
               "array_size": 16,
               "data_width": 8,
               "utilization": 60,
-              "clk_period": 2.0
+              "clk_period": 30.0
             },
             {
               "array_size": 16,
               "data_width": 8,
               "utilization": 60,
-              "clk_period": 5.0
+              "clk_period": 35.0
             },
             {
               "array_size": 16,
               "data_width": 8,
               "utilization": 70,
-              "clk_period": 2.0
+              "clk_period": 30.0
             },
             {
               "array_size": 16,
               "data_width": 8,
               "utilization": 70,
-              "clk_period": 5.0
+              "clk_period": 35.0
             },
             {
               "array_size": 16,
               "data_width": 16,
               "utilization": 20,
-              "clk_period": 2.0
+              "clk_period": 30.0
             },
             {
               "array_size": 16,
               "data_width": 16,
               "utilization": 20,
-              "clk_period": 5.0
+              "clk_period": 35.0
             },
             {
               "array_size": 16,
               "data_width": 16,
               "utilization": 30,
-              "clk_period": 2.0
+              "clk_period": 30.0
             },
             {
               "array_size": 16,
               "data_width": 16,
               "utilization": 30,
-              "clk_period": 5.0
+              "clk_period": 35.0
             },
             {
               "array_size": 16,
               "data_width": 16,
               "utilization": 40,
-              "clk_period": 2.0
+              "clk_period": 30.0
             },
             {
               "array_size": 16,
               "data_width": 16,
               "utilization": 40,
-              "clk_period": 5.0
+              "clk_period": 35.0
             },
             {
               "array_size": 16,
               "data_width": 16,
               "utilization": 50,
-              "clk_period": 2.0
+              "clk_period": 30.0
             },
             {
               "array_size": 16,
               "data_width": 16,
               "utilization": 50,
-              "clk_period": 5.0
+              "clk_period": 35.0
             },
             {
               "array_size": 16,
               "data_width": 16,
               "utilization": 60,
-              "clk_period": 2.0
+              "clk_period": 30.0
             },
             {
               "array_size": 16,
               "data_width": 16,
               "utilization": 60,
-              "clk_period": 5.0
+              "clk_period": 35.0
             },
             {
               "array_size": 16,
               "data_width": 16,
               "utilization": 70,
-              "clk_period": 2.0
+              "clk_period": 30.0
             },
             {
               "array_size": 16,
               "data_width": 16,
               "utilization": 70,
-              "clk_period": 5.0
+              "clk_period": 35.0
             }
           ]'
           if [ "$TEST_MODE" = "test_1_run" ]; then

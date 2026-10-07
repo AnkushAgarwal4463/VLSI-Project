@@ -3,14 +3,18 @@ name: Systolic Array Congestion Sweep
 on:
   workflow_dispatch:
     inputs:
-      test_mode:
-        description: "Select sweep mode"
+      test_mode: 
+        description: "Select experiment size"
         required: true
-        default: test_1_run
         type: choice
+        default: test_1_run
         options:
           - test_1_run
           - full_72_run
+
+permissions:
+  contents: read
+  actions: write
 
 jobs:
 
@@ -26,474 +30,469 @@ jobs:
 
     steps:
 
-      - name: Generate matrix
+      - name: Generate experiment matrix
         id: set-matrix
         shell: bash
+        env:
+          TEST_MODE: ${{ inputs.test_mode }}
         run: |
-
-          if [ "${{ inputs.test_mode }}" = "test_1_run" ]; then
-
-            MATRIX='{
-              "include": [
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 30,
-                  "clk_period": 5.0
-                }
-              ]
-            }'
-
+          set -euo pipefail
+          TEST_MATRIX='[
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 5.0
+            }
+          ]'
+          FULL_MATRIX='[
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 20,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 20,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 20,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 20,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 4,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 20,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 20,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 20,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 20,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 8,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 20,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 20,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 30,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 60,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 8,
+              "utilization": 70,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 20,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 20,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 30,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 40,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 50,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 60,
+              "clk_period": 5.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 2.0
+            },
+            {
+              "array_size": 16,
+              "data_width": 16,
+              "utilization": 70,
+              "clk_period": 5.0
+            }
+          ]'
+          if [ "$TEST_MODE" = "test_1_run" ]; then
+            echo "Selected: TEST RUN"
+            JSON_OUT=$(printf '%s' "$TEST_MATRIX" | jq -c .)
           else
-
-            MATRIX='{
-              "include": [
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 20,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 20,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 30,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 30,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 40,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 40,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 50,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 50,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 60,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 60,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 70,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 8,
-                  "utilization": 70,
-                  "clk_period": 5.0
-                },
-
-                {
-                  "array_size": 4,
-                  "data_width": 16,
-                  "utilization": 20,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 16,
-                  "utilization": 20,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 16,
-                  "utilization": 30,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 16,
-                  "utilization": 30,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 16,
-                  "utilization": 40,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 16,
-                  "utilization": 40,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 16,
-                  "utilization": 50,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 16,
-                  "utilization": 50,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 16,
-                  "utilization": 60,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 16,
-                  "utilization": 60,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 16,
-                  "utilization": 70,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 4,
-                  "data_width": 16,
-                  "utilization": 70,
-                  "clk_period": 5.0
-                },
-
-                {
-                  "array_size": 8,
-                  "data_width": 8,
-                  "utilization": 20,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 8,
-                  "utilization": 20,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 8,
-                  "utilization": 30,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 8,
-                  "utilization": 30,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 8,
-                  "utilization": 40,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 8,
-                  "utilization": 40,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 8,
-                  "utilization": 50,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 8,
-                  "utilization": 50,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 8,
-                  "utilization": 60,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 8,
-                  "utilization": 60,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 8,
-                  "utilization": 70,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 8,
-                  "utilization": 70,
-                  "clk_period": 5.0
-                },
-
-                {
-                  "array_size": 8,
-                  "data_width": 16,
-                  "utilization": 20,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 16,
-                  "utilization": 20,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 16,
-                  "utilization": 30,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 16,
-                  "utilization": 30,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 16,
-                  "utilization": 40,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 16,
-                  "utilization": 40,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 16,
-                  "utilization": 50,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 16,
-                  "utilization": 50,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 16,
-                  "utilization": 60,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 16,
-                  "utilization": 60,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 16,
-                  "utilization": 70,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 8,
-                  "data_width": 16,
-                  "utilization": 70,
-                  "clk_period": 5.0
-                },
-
-                {
-                  "array_size": 16,
-                  "data_width": 8,
-                  "utilization": 20,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 8,
-                  "utilization": 20,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 8,
-                  "utilization": 30,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 8,
-                  "utilization": 30,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 8,
-                  "utilization": 40,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 8,
-                  "utilization": 40,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 8,
-                  "utilization": 50,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 8,
-                  "utilization": 50,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 8,
-                  "utilization": 60,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 8,
-                  "utilization": 60,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 8,
-                  "utilization": 70,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 8,
-                  "utilization": 70,
-                  "clk_period": 5.0
-                },
-
-                {
-                  "array_size": 16,
-                  "data_width": 16,
-                  "utilization": 20,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 16,
-                  "utilization": 20,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 16,
-                  "utilization": 30,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 16,
-                  "utilization": 30,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 16,
-                  "utilization": 40,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 16,
-                  "utilization": 40,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 16,
-                  "utilization": 50,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 16,
-                  "utilization": 50,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 16,
-                  "utilization": 60,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 16,
-                  "utilization": 60,
-                  "clk_period": 5.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 16,
-                  "utilization": 70,
-                  "clk_period": 2.0
-                },
-                {
-                  "array_size": 16,
-                  "data_width": 16,
-                  "utilization": 70,
-                  "clk_period": 5.0
-                }
-              ]
-            }'
-
+            echo "Selected: FULL 72-RUN SWEEP"
+            JSON_OUT=$(printf '%s' "$FULL_MATRIX" | jq -c .)
           fi
-
-          JSON_OUT=$(printf '%s' "$MATRIX" | jq -c .)
-          printf 'matrix=%s\n' "$JSON_OUT" >> "$GITHUB_OUTPUT"
-
-
+          COUNT=$(printf '%s' "$JSON_OUT" | jq length)
+          echo "Number of configurations: $COUNT"
+          if [ "$TEST_MODE" = "full_72_run" ] && [ "$COUNT" -ne 72 ]; then
+            echo "ERROR: Full sweep does not contain 72 configurations."
+            exit 1
+          fi
+          echo "matrix=$JSON_OUT" >> "$GITHUB_OUTPUT"
   # ================================================================
   # JOB 2: Run Sweep
   # ================================================================
@@ -503,17 +502,14 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    timeout-minutes: 90
+
     strategy:
       fail-fast: false
       max-parallel: 16
-      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
 
-    env:
-      ARRAY_SIZE: ${{ matrix.array_size }}
-      DATA_WIDTH: ${{ matrix.data_width }}
-      UTIL: ${{ matrix.utilization }}
-      CLK_PERIOD: ${{ matrix.clk_period }}
-      RUN_TAG: sys${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.utilization }}_clk${{ matrix.clk_period }}
+      matrix:
+        include: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
 
     steps:
 
@@ -521,215 +517,299 @@ jobs:
         uses: actions/checkout@v4
 
 
-      - name: Set up micromamba
-        uses: mamba-org/setup-micromamba@v2
+      # --------------------------------------------------------------
+      # Cache
+      # --------------------------------------------------------------
+      - name: Cache Conda Toolchain
+        id: cache-conda
+        uses: actions/cache@v4
         with:
-          environment-name: condapdk
-          init-shell: bash
-          cache-environment: true
-          cache-environment-key: condapdk-v4-diskfix
-          create-args: >-
-            python=3.10
-            pip
-          post-cleanup: all
+          path: ./conda-env
+          key: ${{ runner.os }}-condapdk-v6-fmt8
 
 
-      - name: Install Python dependencies
+      # --------------------------------------------------------------
+      # Disk cleanup
+      # --------------------------------------------------------------
+      - name: Free up disk space
+        if: steps.cache-conda.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          python -m pip install --upgrade pip
-          pip install pandas
-
-
-      - name: Install PDK and OpenROAD
-        shell: bash
-        run: |
-
           set -euo pipefail
-
-          if [ ! -d "$HOME/micromamba/envs/condapdk/share/pdk/sky130A" ]; then
-            micromamba install \
-              -n condapdk \
-              -c litex-hub \
-              openroad=2.0_2024.12.31 \
-              sky130=0.0.2
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+      # --------------------------------------------------------------
+      # Toolchain
+      # --------------------------------------------------------------
+      - name: Install toolchain
+        if: steps.cache-conda.outputs.cache-hit != 'true'
+        timeout-minutes: 40
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -Ls \
+            https://micro.mamba.pm/api/micromamba/linux-64/latest \
+            | tar -xvj bin/micromamba
+          ./bin/micromamba create \
+            --yes \
+            --prefix ./conda-env \
+            --channel https://conda.anaconda.org/litex-hub \
+            --channel conda-forge \
+            --channel main \
+            open_pdks.sky130a \
+            openroad \
+            yosys \
+            fmt=8
+      - name: Add toolchain to PATH
+        shell: bash
+        run: |
+          echo "$(pwd)/conda-env/bin" >> "$GITHUB_PATH"
+          echo "$(pwd)/conda-env/lib" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=$(pwd)/conda-env/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+      # --------------------------------------------------------------
+      # Experiment variables
+      # --------------------------------------------------------------
+      - name: Set run environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ARRAY_SIZE=${{ matrix.array_size }}" >> "$GITHUB_ENV"
+          echo "DATA_WIDTH=${{ matrix.data_width }}" >> "$GITHUB_ENV"
+          echo "UTIL=${{ matrix.utilization }}" >> "$GITHUB_ENV"
+          echo "CLK_PERIOD=${{ matrix.clk_period }}" >> "$GITHUB_ENV"
+          echo "RUN_TAG=sys${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.utilization }}_clk${{ matrix.clk_period }}" >> "$GITHUB_ENV"
+      # --------------------------------------------------------------
+      # Find Liberty
+      # --------------------------------------------------------------
+      - name: Locate SKY130 Liberty
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Searching for SKY130 Liberty file..."
+          LIB=$(find ./conda-env -type f \
+            \( -name "sky130_fd_sc_hd__tt_025C_5v00.lib" \
+               -o -name "sky130_fd_sc_hd__tt_025C_5v00.lib.gz" \
+               -o -name "sky130_fd_sc_hd*.lib" \
+               -o -name "sky130_fd_sc_hd*.lib.gz" \) \
+            -print | head -n 1)
+          if [ -z "$LIB" ]; then
+            echo "ERROR: SKY130 Liberty file not found."
+            echo "Available SKY130 files:"
+            find ./conda-env -type f \
+              | grep -i sky130 \
+              | head -100 || true
+            exit 1
           fi
-
-          echo "$HOME/micromamba/envs/condapdk/bin" >> "$GITHUB_PATH"
-
-
-      - name: Show tool versions
+          echo "Found Liberty:"
+          echo "$LIB"
+          if [[ "$LIB" == *.lib.gz ]]; then
+            echo "Liberty is compressed."
+            echo "Decompressing..."
+            gunzip -k "$LIB"
+            LIB="${LIB%.gz}"
+          fi
+          test -f "$LIB"
+          echo "Using Liberty:"
+          echo "$LIB"
+          echo "LIB_FILE=$LIB" >> "$GITHUB_ENV"
+      # --------------------------------------------------------------
+      # Verify
+      # --------------------------------------------------------------
+      - name: Verify toolchain
         shell: bash
         run: |
-
           set -euo pipefail
-
-          which openroad
+          echo "======================================"
+          echo "ARRAY_SIZE = $ARRAY_SIZE"
+          echo "DATA_WIDTH = $DATA_WIDTH"
+          echo "UTIL       = $UTIL"
+          echo "CLK_PERIOD = $CLK_PERIOD"
+          echo "RUN_TAG    = $RUN_TAG"
+          echo "LIB_FILE   = $LIB_FILE"
+          echo "======================================"
+          command -v yosys
+          command -v openroad
+          yosys -V
           openroad -version
-
-          echo
-          echo "PDK:"
-          ls -la "$HOME/micromamba/envs/condapdk/share/pdk/sky130A"
-
-
-      - name: Prepare directories
+          test -f "$LIB_FILE"
+      # ================================================================
+      # SYNTHESIS
+      # ================================================================
+      - name: Synthesize
+        timeout-minutes: 10
         shell: bash
         run: |
-
           set -euo pipefail
-
-          mkdir -p \
-            systolic_project/runs/${RUN_TAG} \
-            systolic_project/synth
-
-
-      - name: Generate systolic array
-        shell: bash
-        run: |
-
-          set -euo pipefail
-
-          python3 systolic_project/generate_systolic.py \
-            --array-size "${ARRAY_SIZE}" \
-            --data-width "${DATA_WIDTH}" \
-            --output-dir systolic_project/synth
-
-
-      - name: Synthesis
-        shell: bash
-        run: |
-
-          set -euo pipefail
-
-          cd systolic_project/synth
-
+          /usr/bin/mkdir -p \
+            "systolic_project/synth"
+          /usr/bin/mkdir -p \
+            "systolic_project/runs/${RUN_TAG}"
+          sed \
+            -e "s|__ARRAY_SIZE__|${ARRAY_SIZE}|g" \
+            -e "s|__DATA_WIDTH__|${DATA_WIDTH}|g" \
+            -e "s|__LIB_FILE__|${LIB_FILE}|g" \
+            -e "s|__RUN_TAG__|${RUN_TAG}|g" \
+            scripts/synth.ys \
+            > /tmp/synth.ys
+          echo "Running Yosys..."
           yosys \
-            -p "read_verilog systolic_array.v; \
-                synth -top systolic_array; \
-                write_verilog systolic_netlist.v" \
-            2>&1 | tee ../runs/${RUN_TAG}/synth_log.txt
-
-
-      - name: Run OpenROAD
-        shell: bash
-        run: |
-
-          set -euo pipefail
-
-          export PDK_ROOT="$HOME/micromamba/envs/condapdk/share/pdk"
-          export PDK=sky130A
-
-          openroad \
-            scripts/openroad_flow.tcl \
+            -s /tmp/synth.ys \
             2>&1 | tee \
-            "systolic_project/runs/${RUN_TAG}/openroad_log.txt"
-
-
-      - name: Check OpenROAD outputs
-        if: always()
+            "systolic_project/runs/${RUN_TAG}/synth_log.txt"
+          test -f \
+            "systolic_project/synth/systolic_netlist.v"
+# ================================================================
+# OPENROAD
+# ================================================================
+      - name: Run OpenROAD
+        timeout-minutes: 30
         shell: bash
         run: |
-
-          echo "=============================================================="
-          echo "OPENROAD OUTPUT CHECK"
-          echo "=============================================================="
-
+          set -euo pipefail
           RUN_DIR="systolic_project/runs/${RUN_TAG}"
-
+          openroad \
+            -exit \
+            scripts/flow.tcl \
+            2>&1 | tee "${RUN_DIR}/openroad_log.txt"
+          test -f "${RUN_DIR}/final.odb"
+      - name: Debug generated reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_DIR="systolic_project/runs/${RUN_TAG}"
+          echo "========================================"
+          echo "RUN DIRECTORY"
+          echo "========================================"
           find "$RUN_DIR" \
-            -maxdepth 1 \
             -type f \
-            -printf "%f %s bytes\n" \
-            | sort
-
+            -print | sort
           echo
-          echo "Required artifacts:"
+          echo "========================================"
+          echo "FILE SIZES"
+          echo "========================================"
+          find "$RUN_DIR" \
+            -type f \
+            -printf '%s bytes  %p\n' | sort
+          echo
+          echo "========================================"
+          echo "OPENROAD LOG - LAST 150 LINES"
+          echo "========================================"
+          if [ -f "${RUN_DIR}/openroad_log.txt" ]; then
+            tail -150 "${RUN_DIR}/openroad_log.txt"
+          else
+            echo "openroad_log.txt NOT FOUND"
+          fi
+          echo
+          echo "========================================"
+          echo "REPORT FILES"
+          echo "========================================"
+          find "$RUN_DIR" \
+            -type f \
+            \( -name "*.rpt" -o -name "*.report" \) \
+            -print | sort
+            
+      - name: Inspect generated reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_DIR="systolic_project/runs/${RUN_TAG}"
+      
+          echo "=================================================="
+          echo "GENERATED FILES"
+          echo "=================================================="
+          find "$RUN_DIR" -maxdepth 1 -type f -printf '%f\n' | sort
 
           for f in \
-            final.def \
-            final.odb \
+            design_area.rpt \
+            placement_area.rpt \
+            cell_usage.rpt \
+            wirelength_detailed.rpt \
+            wirelength_final.rpt \
+            congestion.rpt \
+            route_status_final.rpt \
             timing_setup.rpt \
-            timing_hold.rpt
+            timing_hold.rpt \
+            wns_setup.rpt \
+            tns_setup.rpt \
+            wns_hold.rpt \
+            tns_hold.rpt
           do
+            echo
+            echo "=================================================="
+            echo "$f"
+            echo "=================================================="
+
             if [ -f "$RUN_DIR/$f" ]; then
-              echo "  [OK] $f"
+              cat "$RUN_DIR/$f"
             else
-              echo "  [MISSING] $f"
+              echo "FILE NOT FOUND"
             fi
           done
-
-
-      - name: Diagnose routing artifacts
-        if: always()
+      - name: Debug routing artifacts
         shell: bash
         run: |
-
-          echo "=============================================================="
-          echo "ROUTING ARTIFACT DIAGNOSTIC"
-          echo "=============================================================="
-
-          RUN_DIR="systolic_project/runs/${RUN_TAG}"
-
-          echo
-          echo "Routing files:"
-          find "$RUN_DIR" \
-            -maxdepth 1 \
-            -type f \
-            \( \
-              -name "*.rpt" \
-              -o -name "*.def" \
-              -o -name "*.odb" \
-              -o -name "*.guide" \
-            \) \
-            -printf "%f %s bytes\n" \
-            | sort
-
-          echo
-          echo "Checking final.def..."
-
-          if [ -f "$RUN_DIR/final.def" ]; then
-
-            echo "ROUTED statements:"
-            grep -c "ROUTED" "$RUN_DIR/final.def" || true
-
-            echo "FIXED statements:"
-            grep -c "FIXED" "$RUN_DIR/final.def" || true
-
-            echo
-            echo "First routed/fixed statement:"
-            grep -m 1 -E "ROUTED|FIXED" \
-              "$RUN_DIR/final.def" || true
-
+          echo "=============================================="
+          echo "ROUTING FILE CHECK"
+          echo "=============================================="
+      
+          echo "Current directory:"
+          pwd
+      
+          echo ""
+          echo "Run directory:"
+          ls -lah "systolic_project/runs/${RUN_TAG}" || true
+      
+          echo ""
+          echo "Searching entire workspace:"
+          find . -type f \( \
+            -name "wirelength_detailed.rpt" -o \
+            -name "wirelength_final.rpt" -o \
+            -name "congestion.rpt" -o \
+            -name "route_status_final.rpt" \
+          \) -print
+          
+          echo "=============================================="
+          echo "=============================================="
+          echo "GLOBAL ROUTE REPORT"
+          echo "=============================================="
+          
+          if [ -f "systolic_project/runs/${RUN_TAG}/global_route.rpt" ]; then
+            cat "systolic_project/runs/${RUN_TAG}/global_route.rpt"
           else
-
-            echo "final.def not found."
-
+            echo "global_route.rpt NOT FOUND"
           fi
-
-          echo
-          echo "Checking congestion report..."
-
-          if [ -f "$RUN_DIR/congestion.rpt" ]; then
-            wc -c "$RUN_DIR/congestion.rpt"
-            cat "$RUN_DIR/congestion.rpt"
+          
+          echo ""
+          echo "=============================================="
+          echo "ROUTE STATUS"
+          echo "=============================================="
+          
+          if [ -f "systolic_project/runs/${RUN_TAG}/route_status_final.rpt" ]; then
+            cat "systolic_project/runs/${RUN_TAG}/route_status_final.rpt"
           else
-            echo "congestion.rpt not found."
+            echo "route_status_final.rpt NOT FOUND"
           fi
-
-
+      # ================================================================
+      # FEATURE EXTRACTION
+      # ================================================================
       - name: Extract 17 features
         if: success()
         shell: bash
         run: |
-
           set -euo pipefail
-
           python3 scripts/extract_features.py
-
           test -f \
             "systolic_project/runs/${RUN_TAG}/features.json"
-
-
+      - name: Show extracted features
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "FEATURES.JSON"
+          echo "========================================"
+          cat "systolic_project/runs/${RUN_TAG}/features.json"
       # ================================================================
       # UPLOAD
       # ================================================================
@@ -751,10 +831,8 @@ jobs:
         if: always()
         shell: bash
         run: |
-
           echo "### Run Summary: ${RUN_TAG}" \
             >> "$GITHUB_STEP_SUMMARY"
-
           if [ -f \
             "systolic_project/runs/${RUN_TAG}/final.odb"
           ]; then
@@ -764,7 +842,6 @@ jobs:
             echo "- final.odb: NO" \
               >> "$GITHUB_STEP_SUMMARY"
           fi
-
           if [ -f \
             "systolic_project/runs/${RUN_TAG}/features.json"
           ]; then
@@ -774,10 +851,8 @@ jobs:
             echo "- 17-feature JSON: NO" \
               >> "$GITHUB_STEP_SUMMARY"
           fi
-
-
-   # ================================================================
-  # JOB 3: Aggregate Results
+  # ================================================================
+  # JOB 3: Aggregate
   # ================================================================
   aggregate-results:
 
@@ -793,335 +868,77 @@ jobs:
         uses: actions/checkout@v4
 
 
-      # --------------------------------------------------------------
-      # Python
-      # --------------------------------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
 
-      # --------------------------------------------------------------
-      # Dependencies
-      # --------------------------------------------------------------
       - name: Install dependencies
         shell: bash
         run: |
-          set -euo pipefail
-
           python -m pip install --upgrade pip
           pip install pandas
-
-
-      # --------------------------------------------------------------
-      # Download ALL run artifacts
-      # --------------------------------------------------------------
       - name: Download all result artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: result-*
-          path: downloaded_results
+          path: downloaded_artifacts
           merge-multiple: true
 
 
-      # --------------------------------------------------------------
-      # Show downloaded structure
-      # --------------------------------------------------------------
-      - name: Inspect downloaded artifacts
+      - name: Show downloaded files
         shell: bash
         run: |
-          set -euo pipefail
-
-          echo "=============================================================="
-          echo "DOWNLOADED ARTIFACTS"
-          echo "=============================================================="
-
-          if [ ! -d "downloaded_results" ]; then
-            echo "ERROR: downloaded_results directory does not exist."
-            exit 1
-          fi
-
-          find downloaded_results \
+          echo "Downloaded files:"
+          find downloaded_artifacts \
             -type f \
-            -printf '%p %s bytes\n' \
-            | sort
-
-          echo
-          echo "=============================================================="
-          echo "FEATURE JSON FILES"
-          echo "=============================================================="
-
-          find downloaded_results \
-            -type f \
-            -name "features.json" \
             -print \
             | sort
-
-
-      # --------------------------------------------------------------
-      # Build CSV directly from features.json files
-      # --------------------------------------------------------------
-      - name: Generate dataset CSV
+      - name: Combine JSON features into CSV
         shell: bash
         run: |
           set -euo pipefail
-
-          mkdir -p systolic_project/summary_output
-
-          python3 <<'PY'
-          import json
-          import csv
-          from pathlib import Path
-
-          ROOT = Path("downloaded_results")
-          OUTPUT = Path("systolic_project/summary_output/dataset.csv")
-
-          EXPECTED = [
-              "array_size",
-              "data_width",
-              "utilization",
-              "clock_period",
-              "max_density",
-              "mean_density",
-              "std_density",
-              "pin_density",
-              "avg_fanout",
-              "max_fanout",
-              "x_spread",
-              "y_spread",
-              "num_registers",
-              "logic_depth",
-              "crit_path_wirelength",
-              "estimated_wirelength",
-              "congestion",
-              "WNS",
-              "TNS"
-          ]
-
-          feature_files = sorted(ROOT.rglob("features.json"))
-
-          print("==============================================================")
-          print("FEATURE EXTRACTION FOR DATASET")
-          print("==============================================================")
-          print(f"Search root : {ROOT}")
-          print(f"Feature files found: {len(feature_files)}")
-          print()
-
-          if not feature_files:
-              print("ERROR: No features.json files were found.")
-              print()
-              print("Files actually downloaded:")
-              for p in sorted(ROOT.rglob("*")):
-                  if p.is_file():
-                      print("  ", p)
-              raise SystemExit(1)
-
-          rows = []
-
-          for feature_file in feature_files:
-
-              print(f"Reading: {feature_file}")
-
-              try:
-                  with feature_file.open("r", encoding="utf-8") as f:
-                      data = json.load(f)
-              except Exception as e:
-                  print(f"  WARNING: Could not read JSON: {e}")
-                  continue
-
-              # ------------------------------------------------------
-              # Support normal flat features.json
-              # ------------------------------------------------------
-              if not isinstance(data, dict):
-                  print("  WARNING: JSON root is not an object.")
-                  continue
-
-              row = {}
-
-              for key in EXPECTED:
-                  row[key] = data.get(key, None)
-
-              # ------------------------------------------------------
-              # Recover experiment parameters from run_tag if needed
-              # ------------------------------------------------------
-              run_tag = data.get("run_tag")
-
-              if run_tag:
-                  import re
-
-                  match = re.search(
-                      r"sys(\d+)_w(\d+)_u(\d+)_clk([0-9.]+)",
-                      str(run_tag)
-                  )
-
-                  if match:
-                      if row["array_size"] is None:
-                          row["array_size"] = int(match.group(1))
-
-                      if row["data_width"] is None:
-                          row["data_width"] = int(match.group(2))
-
-                      if row["utilization"] is None:
-                          row["utilization"] = int(match.group(3))
-
-                      if row["clock_period"] is None:
-                          row["clock_period"] = float(match.group(4))
-
-              # ------------------------------------------------------
-              # Also support alternative parameter names
-              # ------------------------------------------------------
-              if row["clock_period"] is None:
-                  row["clock_period"] = data.get("clk_period")
-
-              if row["utilization"] is None:
-                  row["utilization"] = data.get("util")
-
-              # ------------------------------------------------------
-              # Add row
-              # ------------------------------------------------------
-              rows.append(row)
-
-              print("  OK")
-
-          # ----------------------------------------------------------
-          # Write CSV
-          # ----------------------------------------------------------
-          OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-
-          with OUTPUT.open(
-              "w",
-              encoding="utf-8",
-              newline=""
-          ) as f:
-
-              writer = csv.DictWriter(
-                  f,
-                  fieldnames=EXPECTED,
-                  extrasaction="ignore"
-              )
-
-              writer.writeheader()
-
-              for row in rows:
-                  writer.writerow(row)
-
-          print()
-          print("==============================================================")
-          print("CSV CREATED")
-          print("==============================================================")
-          print(f"Output : {OUTPUT}")
-          print(f"Rows   : {len(rows)}")
-          print(f"Columns: {len(EXPECTED)}")
-          print()
-
-          print("Header:")
-          print(",".join(EXPECTED))
-
-          if len(rows) == 0:
-              print("ERROR: CSV contains zero rows.")
-              raise SystemExit(1)
-          PY
-
-
-      # --------------------------------------------------------------
-      # Verify CSV
-      # --------------------------------------------------------------
+          /usr/bin/mkdir -p summary_output
+          python3 scripts/aggregate_dataset.py \
+            --runs_dir downloaded_artifacts \
+            --output_csv \
+            summary_output/systolic_array_sweep_dataset.csv
       - name: Verify CSV
         shell: bash
         run: |
           set -euo pipefail
-
-          CSV="systolic_project/summary_output/dataset.csv"
-
-          echo "=============================================================="
-          echo "DATASET VERIFICATION"
-          echo "=============================================================="
-
+          CSV="summary_output/systolic_array_sweep_dataset.csv"
           test -f "$CSV"
-
-          echo
-          echo "CSV location:"
-          ls -lh "$CSV"
-
-          echo
-          echo "CSV preview:"
+          echo "Dataset:"
+          echo "--------------------------------"
           head -n 5 "$CSV"
-
-          echo
+          echo "--------------------------------"
           ROWS=$(tail -n +2 "$CSV" | wc -l)
-
           echo "Rows generated: $ROWS"
-
-          if [ "$ROWS" -eq 0 ]; then
-            echo "ERROR: Dataset contains zero rows."
-            exit 1
-          fi
-
-
-      # --------------------------------------------------------------
-      # Verify 19-column schema
-      # --------------------------------------------------------------
-      - name: Verify 19-column schema
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          CSV="systolic_project/summary_output/dataset.csv"
-
-          EXPECTED="array_size,data_width,utilization,clock_period,max_density,mean_density,std_density,pin_density,avg_fanout,max_fanout,x_spread,y_spread,num_registers,logic_depth,crit_path_wirelength,estimated_wirelength,congestion,WNS,TNS"
-
-          echo "Actual header:"
-          head -n 1 "$CSV" | cat -A
-
-          echo
-          echo "Expected header:"
-          echo "$EXPECTED"
-
-          echo
-          echo "Checking CSV schema..."
-
-          ACTUAL=$(python3 - "$CSV" <<'PY'
-          import sys
-          from pathlib import Path
-
-          csv_file = Path(sys.argv[1])
-
-          with csv_file.open(
-              "r",
-              encoding="utf-8-sig",
-              newline=""
-          ) as f:
-              header = f.readline().strip().replace("\r", "")
-
-          print(header)
-          PY
-          )
-
-          if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo
-            echo "ERROR: CSV does not contain the expected 19 columns."
-            echo
-            echo "Actual normalized header:"
-            printf '%s\n' "$ACTUAL"
-            echo
-            echo "Expected header:"
-            printf '%s\n' "$EXPECTED"
-            exit 1
-          fi
-
-          echo
-          echo "19-column schema verified successfully."
-
-
-      # --------------------------------------------------------------
-      # Upload final dataset
-      # --------------------------------------------------------------
-      - name: Upload final dataset
-        if: always()
+      - name: Upload Aggregated CSV Dataset
         uses: actions/upload-artifact@v4
         with:
-          name: final-dataset
-          path: |
-            systolic_project/summary_output/dataset.csv
-          if-no-files-found: warn
+          name: full-sweep-dataset-csv
+          path: summary_output/systolic_array_sweep_dataset.csv
+          if-no-files-found: error
+
+
+      - name: Aggregate summary
+        if: always()
+        shell: bash
+        run: |
+          echo "### Aggregate Dataset Summary" \
+            >> "$GITHUB_STEP_SUMMARY"
+          CSV="summary_output/systolic_array_sweep_dataset.csv"
+          if [ -f "$CSV" ]; then
+            COUNT=$(tail -n +2 "$CSV" | wc -l)
+            echo "- Dataset generated: YES" \
+              >> "$GITHUB_STEP_SUMMARY"
+            echo "- Run entries: $COUNT" \
+              >> "$GITHUB_STEP_SUMMARY"
+            echo "- Expected full sweep: 72" \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Dataset generated: NO" \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi

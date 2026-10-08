@@ -542,7 +542,7 @@ jobs:
 
     strategy:
       fail-fast: false
-      max-parallel: 24
+      max-parallel: 3
 
       matrix:
         include: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}

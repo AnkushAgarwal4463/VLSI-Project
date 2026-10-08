@@ -699,8 +699,8 @@ puts ""
 puts "=============================================="
 puts "DETAILED ROUTING"
 puts "=============================================="
-puts "[INFO] Starting detailed routing..."
-puts "[INFO] Maximum DRT optimization iterations: 8"
+puts "\[INFO\] Starting detailed routing..."
+puts "\[INFO\] Maximum DRT optimization iterations: 8"
 
 set drt_status "FAILED"
 
@@ -713,12 +713,21 @@ if {[catch {
 
 } err]} {
 
-    puts "[ERROR] Detailed routing failed:"
+    puts "\[ERROR\] Detailed routing failed:"
     puts "$err"
 
 } else {
 
-    puts "[INFO] Detailed routing completed successfully."
+    puts "\[INFO\] Detailed routing completed successfully."
+
+}
+
+puts "\[INFO\] DRT status: $drt_status"
+
+if {$drt_status != "COMPLETED"} {
+    puts "\[ERROR\] No valid detailed-routing result was produced."
+    exit 1
+}
 
 }
 

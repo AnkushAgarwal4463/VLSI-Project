@@ -729,8 +729,6 @@ if {$drt_status != "COMPLETED"} {
     exit 1
 }
 
-}
-
 puts "[INFO] DRT status: $drt_status"
 
 # -------------------------------------------------------------

@@ -150,6 +150,7 @@ foreach inst [get_cells -hierarchical *] {
     if {![catch {get_property -quiet $inst lib_cell} cell_master]} {
         if {$cell_master != ""} {
             set area [get_property -quiet $cell_master area]
+
             if {$area != "" && $area > 0} {
                 set total_cell_area \
                     [expr {$total_cell_area + $area}]
@@ -158,7 +159,12 @@ foreach inst [get_cells -hierarchical *] {
     }
 }
 
+# ----------------------------------------------------------------------
+# Fallback if cell area could not be obtained
+# ----------------------------------------------------------------------
+
 if {$total_cell_area <= 0.0} {
+
     set inst_count \
         [llength [get_cells -hierarchical *]]
 
@@ -170,6 +176,10 @@ if {$total_cell_area <= 0.0} {
     puts "\[WARNING\] Using estimated cell area."
 }
 
+# ----------------------------------------------------------------------
+# Calculate required core area
+# ----------------------------------------------------------------------
+
 set buffered_cell_area \
     [expr {$total_cell_area * 1.15}]
 
@@ -179,25 +189,62 @@ set required_core_area \
 set core_dim \
     [expr {sqrt($required_core_area)}]
 
+# ----------------------------------------------------------------------
+# Floorplan diagnostic
+# ----------------------------------------------------------------------
+
+puts ""
+puts "=============================================="
+puts "FLOORPLAN DIAGNOSTIC"
+puts "=============================================="
+puts "Total cell area        : $total_cell_area"
+puts "Buffered cell area     : $buffered_cell_area"
+puts "Requested utilization  : $UTIL %"
+puts "Required core area     : $required_core_area"
+puts "Core dimension         : $core_dim"
+
+# ----------------------------------------------------------------------
+# Snap core dimension to site height
+# ----------------------------------------------------------------------
+
 set site_height 2.72
 
 set core_dim_snapped \
     [expr {ceil($core_dim / $site_height) * $site_height}]
 
+puts "Snapped core dimension : $core_dim_snapped"
+
+# ----------------------------------------------------------------------
+# Minimum core dimension
+# ----------------------------------------------------------------------
+
 if {$core_dim_snapped < 150.0} {
     set core_dim_snapped 150.0
 }
 
+# ----------------------------------------------------------------------
+# Determine core margin from utilization
+# ----------------------------------------------------------------------
+
 if {$UTIL >= 60} {
+
     set raw_margin 50.0
+
 } elseif {$UTIL >= 40} {
+
     set raw_margin 35.0
+
 } else {
+
     set raw_margin 25.0
 }
 
 set core_margin \
     [expr {ceil($raw_margin / $site_height) * $site_height}]
+
+# ----------------------------------------------------------------------
+# Calculate core coordinates
+# ----------------------------------------------------------------------
 
 set core_x0 $core_margin
 set core_y0 $core_margin
@@ -208,6 +255,10 @@ set core_x1 \
 set core_y1 \
     [expr {$core_y0 + $core_dim_snapped}]
 
+# ----------------------------------------------------------------------
+# Calculate die coordinates
+# ----------------------------------------------------------------------
+
 set die_x0 0.0
 set die_y0 0.0
 
@@ -216,6 +267,31 @@ set die_x1 \
 
 set die_y1 \
     [expr {$core_y1 + $core_margin}]
+
+# ----------------------------------------------------------------------
+# Final floorplan area diagnostic
+# ----------------------------------------------------------------------
+
+puts ""
+puts "=============================================="
+puts "FLOORPLAN AREA DIAGNOSTIC"
+puts "=============================================="
+
+puts "Core area:"
+puts "  X: $core_x0 -> $core_x1"
+puts "  Y: $core_y0 -> $core_y1"
+
+puts "Die area:"
+puts "  X: $die_x0 -> $die_x1"
+puts "  Y: $die_y0 -> $die_y1"
+
+puts "Core margin          : $core_margin"
+puts "Site height          : $site_height"
+puts "=============================================="
+
+# ----------------------------------------------------------------------
+# Initialize floorplan
+# ----------------------------------------------------------------------
 
 initialize_floorplan \
     -die_area "$die_x0 $die_y0 $die_x1 $die_y1" \
@@ -241,8 +317,9 @@ if {[catch {
 
 } err]} {
 
-    puts "\[WARNING\] set_wire_rc failed:"
+    puts "\[ERROR\] set_wire_rc failed:"
     puts "$err"
+    exit 1
 }
 
 puts "\[INFO\] Resizer configuration completed."
@@ -295,23 +372,42 @@ global_placement \
 # 12. Pin placement
 # ----------------------------------------------------------------------
 
-puts "\[INFO\] Placing IO pins..."
-
 if {[catch {
+
     place_pins \
         -hor_layers {met3 met5} \
         -ver_layers {met2 met4}
+
 } err]} {
-    puts "\[WARNING\] Pin placement warning:"
+
+    puts "\[ERROR\] Pin placement failed:"
     puts "$err"
+    exit 1
+
 }
+
+puts "\[OK\] IO pin placement completed."
 
 # ----------------------------------------------------------------------
 # 13. Detailed placement
 # ----------------------------------------------------------------------
 
-detailed_placement
-check_placement
+puts "\[INFO\] Running detailed placement..."
+
+if {[catch {
+
+    detailed_placement
+    check_placement
+
+} err]} {
+
+    puts "\[ERROR\] Detailed placement failed:"
+    puts "$err"
+    exit 1
+
+}
+
+puts "\[OK\] Detailed placement completed."
 
 # ----------------------------------------------------------------------
 # 14. RESIZER / TIMING REPAIR
@@ -356,8 +452,9 @@ if {[catch {
 
 } err]} {
 
-    puts "\[WARNING\] repair_design failed:"
+    puts "\[ERROR\] repair_design failed:"
     puts "$err"
+    exit 1
 
 } else {
 
@@ -378,13 +475,13 @@ if {[catch {
 
 } err]} {
 
-    puts "\[WARNING\] repair_timing failed:"
+    puts "\[ERROR\] repair_timing failed:"
     puts "$err"
+    exit 1
 
-} else {
-
-    puts "\[OK\] repair_timing completed."
 }
+
+puts "\[OK\] repair_timing completed."
 
 # ----------------------------------------------------------------------
 # Legalize after Resizer
@@ -460,21 +557,13 @@ foreach f [list $route_guide $congestion_report $global_route_log] {
 
 puts "\[INFO\] Starting OpenROAD global router..."
 
-# ----------------------------------------------------------------------
-# Run global routing
-#
-# IMPORTANT:
-# Do NOT use "tee" here.
-# This OpenROAD build does not provide the tee Tcl command.
-# ----------------------------------------------------------------------
-
 if {[catch {
 
     global_route \
         -guide_file $route_guide \
         -congestion_report_file $congestion_report \
         -congestion_report_iter_step 1 \
-        -congestion_iterations 100 \
+        -congestion_iterations 50 \
         -verbose
 
 } err]} {
@@ -599,54 +688,6 @@ if {[file exists $congestion_report]} {
 
 }
 
-# ----------------------------------------------------------------------
-# Global routing segments
-# ----------------------------------------------------------------------
-
-puts ""
-puts "\[INFO\] Writing global route segments..."
-
-set global_route_segments \
-    "${run_dir}/global_route_segments.txt"
-
-if {[file exists $global_route_segments]} {
-    file delete -force $global_route_segments
-}
-
-if {[catch {
-
-    write_global_route_segments \
-        $global_route_segments
-
-} err]} {
-
-    puts "\[WARNING\] Global route segment export failed:"
-    puts "$err"
-
-} else {
-
-    if {[file exists $global_route_segments]} {
-
-        set grs_size [file size $global_route_segments]
-
-        if {$grs_size > 0} {
-
-            puts "\[OK\] global_route_segments.txt generated: $grs_size bytes"
-
-        } else {
-
-            puts "\[WARNING\] global_route_segments.txt is empty."
-
-        }
-
-    } else {
-
-        puts "\[WARNING\] global_route_segments.txt was not generated."
-
-    }
-
-}
-
 puts "=============================================="
 puts "GLOBAL ROUTING SECTION COMPLETED"
 puts "=============================================="
@@ -654,21 +695,68 @@ puts "=============================================="
 # 16. Detailed routing
 # ----------------------------------------------------------------------
 
-puts "\[INFO\] Running detailed routing..."
+puts ""
+puts "=============================================="
+puts "DETAILED ROUTING"
+puts "=============================================="
+puts "[INFO] Starting detailed routing..."
+puts "[INFO] Maximum DRT optimization iterations: 8"
+
+set drt_status "FAILED"
 
 if {[catch {
-
     detailed_route \
-        -output_drc "${run_dir}/detailed_route_drc.rpt"
+        -output_drc "${run_dir}/detailed_route_drc.rpt" \
+        -droute_end_iter 8
+
+    set drt_status "COMPLETED"
 
 } err]} {
 
-    puts "\[ERROR\] Detailed routing failed:"
+    puts "[ERROR] Detailed routing failed:"
     puts "$err"
+
+} else {
+
+    puts "[INFO] Detailed routing completed successfully."
+
+}
+
+puts "[INFO] DRT status: $drt_status"
+
+# -------------------------------------------------------------
+# Verify DRT result
+# -------------------------------------------------------------
+
+if {$drt_status != "COMPLETED"} {
+
+    puts "[ERROR] No valid detailed-routing result was produced."
+    puts "[ERROR] Stopping flow because routing did not complete."
+
     exit 1
 }
 
-puts "\[INFO\] Detailed routing completed."
+# -------------------------------------------------------------
+# Verify DRC report
+# -------------------------------------------------------------
+
+if {[file exists "${run_dir}/detailed_route_drc.rpt"]} {
+
+    set drc_size [file size "${run_dir}/detailed_route_drc.rpt"]
+
+    puts "[INFO] DRT DRC report generated:"
+    puts "       ${run_dir}/detailed_route_drc.rpt"
+    puts "[INFO] DRC report size: $drc_size bytes"
+
+} else {
+
+    puts "[WARNING] DRT completed, but DRC report was not found:"
+    puts "          ${run_dir}/detailed_route_drc.rpt"
+}
+
+puts "=============================================="
+puts "[OK] Detailed routing stage completed."
+puts "=============================================="
 
 # ----------------------------------------------------------------------
 # Final DEF
@@ -840,7 +928,6 @@ puts "=============================================="
 
 foreach f [list \
     "${run_dir}/route.guide" \
-    "${run_dir}/global_route_segments.txt" \
     "${run_dir}/global_route.rpt" \
     "${run_dir}/congestion.rpt" \
     "${run_dir}/wirelength_detailed.rpt" \
@@ -964,7 +1051,6 @@ foreach f [list \
     "${run_dir}/final.odb" \
     "${run_dir}/final.def" \
     "${run_dir}/route.guide" \
-    "${run_dir}/global_route_segments.txt" \
     "${run_dir}/global_route.rpt" \
     "${run_dir}/congestion.rpt" \
     "${run_dir}/wirelength_detailed.rpt" \
@@ -1007,7 +1093,6 @@ puts "Generated:"
 puts "  final.odb"
 puts "  final.def"
 puts "  route.guide"
-puts "  global_route_segments.txt"
 puts "  global_route.rpt"
 puts "  wirelength_detailed.rpt"
 puts "  wirelength_final.rpt"

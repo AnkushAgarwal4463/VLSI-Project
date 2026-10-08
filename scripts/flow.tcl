@@ -729,7 +729,7 @@ if {$drt_status != "COMPLETED"} {
     exit 1
 }
 
-puts "[INFO] DRT status: $drt_status"
+puts "\[INFO\] DRT status: $drt_status"
 
 # -------------------------------------------------------------
 # Verify DRT result
@@ -737,8 +737,8 @@ puts "[INFO] DRT status: $drt_status"
 
 if {$drt_status != "COMPLETED"} {
 
-    puts "[ERROR] No valid detailed-routing result was produced."
-    puts "[ERROR] Stopping flow because routing did not complete."
+    puts "\[ERROR\] No valid detailed-routing result was produced."
+    puts "\[ERROR\] Stopping flow because routing did not complete."
 
     exit 1
 }
@@ -751,9 +751,9 @@ if {[file exists "${run_dir}/detailed_route_drc.rpt"]} {
 
     set drc_size [file size "${run_dir}/detailed_route_drc.rpt"]
 
-    puts "[INFO] DRT DRC report generated:"
+    puts "\[INFO\] DRT DRC report generated:"
     puts "       ${run_dir}/detailed_route_drc.rpt"
-    puts "[INFO] DRC report size: $drc_size bytes"
+    puts "\[INFO\] DRC report size: $drc_size bytes"
 
 } else {
 

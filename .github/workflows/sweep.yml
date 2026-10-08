@@ -38,13 +38,43 @@ jobs:
         run: |
           set -euo pipefail
           TEST_MATRIX='[
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 30,
-              "clk_period": 10.0
-            }
-          ]'
+              {
+                "array_size": 4,
+                "data_width": 8,
+                "utilization": 20,
+                "clk_period": 10.0
+              },
+              {
+                "array_size": 4,
+                "data_width": 16,
+                "utilization": 70,
+                "clk_period": 15.0
+              },
+              {
+                "array_size": 8,
+                "data_width": 8,
+                "utilization": 20,
+                "clk_period": 20.0
+              },
+              {
+                "array_size": 8,
+                "data_width": 16,
+                "utilization": 70,
+                "clk_period": 25.0
+              },
+              {
+                "array_size": 16,
+                "data_width": 8,
+                "utilization": 20,
+                "clk_period": 30.0
+              },
+              {
+                "array_size": 16,
+                "data_width": 16,
+                "utilization": 70,
+                "clk_period": 35.0
+              }
+            ]'
           FULL_MATRIX='[
             {
               "array_size": 4,
@@ -488,9 +518,15 @@ jobs:
           fi
           COUNT=$(printf '%s' "$JSON_OUT" | jq length)
           echo "Number of configurations: $COUNT"
+          
+          if [ "$TEST_MODE" = "test_1_run" ] && [ "$COUNT" -ne 6 ]; then
+          echo "ERROR: Test matrix does not contain 6 configurations."
+          exit 1
+          fi
+        
           if [ "$TEST_MODE" = "full_72_run" ] && [ "$COUNT" -ne 72 ]; then
-            echo "ERROR: Full sweep does not contain 72 configurations."
-            exit 1
+          echo "ERROR: Full sweep does not contain 72 configurations."
+          exit 1
           fi
           echo "matrix=$JSON_OUT" >> "$GITHUB_OUTPUT"
   # ================================================================

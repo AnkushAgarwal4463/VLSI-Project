@@ -757,12 +757,12 @@ if {[file exists "${run_dir}/detailed_route_drc.rpt"]} {
 
 } else {
 
-    puts "[WARNING] DRT completed, but DRC report was not found:"
+    puts "\[WARNING\] DRT completed, but DRC report was not found:"
     puts "          ${run_dir}/detailed_route_drc.rpt"
 }
 
 puts "=============================================="
-puts "[OK] Detailed routing stage completed."
+puts "\[OK\] Detailed routing stage completed."
 puts "=============================================="
 
 # ----------------------------------------------------------------------

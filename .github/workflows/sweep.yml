@@ -10,7 +10,7 @@ on:
         default: test_1_run
         options:
           - test_1_run
-          - full_72_run
+          - full_216_run
 
 permissions:
   contents: read
@@ -88,7 +88,7 @@ jobs:
                              open(__import__("os").environ["GITHUB_EVENT_PATH"]).read())
           selected_mode = event.get("inputs", {}).get("test_mode", "test_1_run")
 
-          if selected_mode == "full_72_run":
+          if selected_mode == "full_216_run":
               configs = full_configs
               mode = "full"
           else:
@@ -428,7 +428,7 @@ jobs:
       # ================================================================
       # FEATURE EXTRACTION
       # ================================================================
-      - name: Extract 17 features
+      - name: Extract features
         if: success()
         shell: bash
         run: |
@@ -478,7 +478,7 @@ jobs:
           if [ -f \
             "systolic_project/runs/${RUN_TAG}/features.json"
           ]; then
-            echo "- 17-feature JSON: YES" \
+            echo "- feature JSON: YES" \
               >> "$GITHUB_STEP_SUMMARY"
           else
             echo "- 17-feature JSON: NO" \
@@ -555,6 +555,7 @@ jobs:
           import json
           import csv
           import re
+          import math
           from pathlib import Path
 
           ROOT = Path("downloaded_artifacts")
@@ -609,7 +610,7 @@ jobs:
                       print(f"  {p}")
               raise SystemExit(1)
 
-          rows = []
+          rows_by_run_tag = {}
 
           for feature_file in feature_files:
 
@@ -630,38 +631,32 @@ jobs:
                   print("  [WARNING] JSON root is not an object.")
                   continue
 
-              row = {}
+              if data.get("valid_run") is False:
+                  print("  [SKIP] valid_run=False")
+                  continue
 
-              # ------------------------------------------------------
-              # Copy the 19 expected fields
-              # ------------------------------------------------------
+              run_tag = data.get("run_tag")
+
+              if not isinstance(run_tag, str) or not run_tag.strip():
+                  print("  [SKIP] Missing or invalid run_tag")
+                  continue
+
+              row = {}
 
               for column in COLUMNS:
                   row[column] = data.get(column)
 
-              # ------------------------------------------------------
-              # Recover experiment parameters from rectangular run_tag
-              # Example: sys2x4_w4_u20_clk10
-              # ------------------------------------------------------
+              match = re.fullmatch(
+                  r"sys(\d+)x(\d+)_w(\d+)_u(\d+)_clk([0-9.]+)",
+                  run_tag
+              )
 
-              run_tag = data.get("run_tag")
-
-              if run_tag:
-                  match = re.search(
-                      r"sys(\d+)x(\d+)_w(\d+)_u(\d+)_clk([0-9.]+)",
-                      str(run_tag)
-                  )
-
-                  if match:
-                      row["array_rows"] = int(match.group(1))
-                      row["array_cols"] = int(match.group(2))
-                      row["data_width"] = int(match.group(3))
-                      row["utilization"] = int(match.group(4))
-                      row["clock_period"] = float(match.group(5))
-
-              # ------------------------------------------------------
-              # Alternative names
-              # ------------------------------------------------------
+              if match:
+                  row["array_rows"] = int(match.group(1))
+                  row["array_cols"] = int(match.group(2))
+                  row["data_width"] = int(match.group(3))
+                  row["utilization"] = int(match.group(4))
+                  row["clock_period"] = float(match.group(5))
 
               if row["clock_period"] is None:
                   row["clock_period"] = data.get("clk_period")
@@ -669,12 +664,27 @@ jobs:
               if row["utilization"] is None:
                   row["utilization"] = data.get("util")
 
-              # ------------------------------------------------------
-              # Store row
-              # ------------------------------------------------------
+              valid = True
 
-              rows.append(row)
+              for column in COLUMNS:
+                  try:
+                      value = float(row[column])
+                      if not math.isfinite(value):
+                          valid = False
+                          break
+                      row[column] = value
+                  except (TypeError, ValueError):
+                      valid = False
+                      break
 
+              if not valid:
+                  print("  [SKIP] Missing or invalid feature values")
+                  continue
+
+              if run_tag in rows_by_run_tag:
+                  print(f"  [WARNING] Duplicate run_tag: {run_tag}")
+
+              rows_by_run_tag[run_tag] = row
               print("  [OK]")
 
           # ----------------------------------------------------------
@@ -699,7 +709,10 @@ jobs:
               )
 
               writer.writeheader()
-              writer.writerows(rows)
+              for run_tag in sorted(rows_by_run_tag):
+                  writer.writerow(rows_by_run_tag[run_tag])
+
+          rows = list(rows_by_run_tag.values())
 
           print()
           print("=" * 70)
@@ -760,6 +773,10 @@ jobs:
           ROWS=$(tail -n +2 "$CSV" | wc -l)
 
           echo "Rows generated: $ROWS"
+          if [ "$ROWS" -ne 6 ] && [ "$ROWS" -ne 216 ]; then
+            echo "[ERROR] Unexpected number of dataset rows: $ROWS"
+            exit 1
+          fi
 
           if [ "$ROWS" -eq 0 ]; then
             echo "[ERROR] Dataset contains zero rows."

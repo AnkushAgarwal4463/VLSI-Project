@@ -1,14 +1,18 @@
+
 # ================================================================
 # Systolic Array Yosys Synthesis
+# Supports rectangular and square arrays
 # ================================================================
 
 read_verilog -sv \
-  -DARRAY_SIZE=__ARRAY_SIZE__ \
+  -DARRAY_ROWS=__ARRAY_ROWS__ \
+  -DARRAY_COLS=__ARRAY_COLS__ \
   -DDATA_WIDTH=__DATA_WIDTH__ \
   rtl/pe.v
 
 read_verilog -sv \
-  -DARRAY_SIZE=__ARRAY_SIZE__ \
+  -DARRAY_ROWS=__ARRAY_ROWS__ \
+  -DARRAY_COLS=__ARRAY_COLS__ \
   -DDATA_WIDTH=__DATA_WIDTH__ \
   rtl/systolic_array.v
 

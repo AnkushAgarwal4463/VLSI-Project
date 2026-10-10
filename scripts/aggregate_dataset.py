@@ -20,34 +20,10 @@ OUTPUT_CSV = Path("systolic_project/summary_output/dataset.csv")
 # ============================================================
 # FINAL ML DATASET SCHEMA
 # ============================================================
-#
-# 19 ML features:
-#
-# 1.  array_size
-# 2.  data_width
-# 3.  utilization
-# 4.  clock_period
-# 5.  max_density
-# 6.  mean_density
-# 7.  std_density
-# 8.  pin_density
-# 9.  avg_fanout
-# 10. max_fanout
-# 11. x_spread
-# 12. y_spread
-# 13. num_registers
-# 14. logic_depth
-# 15. crit_path_wirelength
-# 16. estimated_wirelength
-# 17. congestion
-# 18. WNS
-# 19. TNS
-#
-# run_tag is retained internally for deduplication only.
-# ============================================================
 
 FEATURE_COLUMNS = [
-    "array_size",
+    "array_rows",
+    "array_cols",
     "data_width",
     "utilization",
     "clock_period",
@@ -67,7 +43,6 @@ FEATURE_COLUMNS = [
     "WNS",
     "TNS",
 ]
-
 REQUIRED_FIELDS = FEATURE_COLUMNS + ["run_tag"]
 
 
@@ -229,7 +204,7 @@ def check_valid_run(data, path):
 
 def normalize_record(data):
     """
-    Extract only the 19 ML columns.
+    Extract only the 20 ML columns.
 
     run_tag is intentionally excluded from the final CSV.
     """
@@ -241,7 +216,8 @@ def normalize_record(data):
 
         # Store integers as integers where appropriate
         if field in {
-            "array_size",
+            "array_rows",
+            "array_cols",
             "data_width",
             "max_fanout",
             "num_registers",

@@ -97,15 +97,19 @@ jobs:
 
           matrix = {"include": configs}
 
+          # These two lines go to GITHUB_OUTPUT.
           print(f"matrix={json.dumps(matrix, separators=(',', ':'))}")
           print(f"expected_runs={len(configs)}")
+
+          # Send diagnostic output to the logs, NOT GITHUB_OUTPUT.
+          print("Generated configurations:", file=sys.stderr)
+          for i, config in enumerate(configs, start=1):
+              print(f"{i}: {config}", file=sys.stderr)
 
           print(
               f"Mode: {mode}; generated {len(configs)} configurations.",
               file=sys.stderr
           )
-          PY
-
   # ================================================================
   # JOB 2: Run Sweep
   # ================================================================
@@ -488,12 +492,9 @@ jobs:
   # JOB 3: Aggregate
   # ================================================================
   aggregate-results:
-
     needs: run-sweep
-
     runs-on: ubuntu-latest
-
-    if: always()
+    if: ${{ needs.run-sweep.result == 'success' }}
 
     steps:
 

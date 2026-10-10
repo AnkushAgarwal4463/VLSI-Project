@@ -94,40 +94,15 @@ def extract_first_number(text):
 # ================================================================
 
 def get_environment_features():
-
     return {
-
         "run_tag": RUN_TAG,
-
-        "array_size": int(
-            os.environ.get(
-                "ARRAY_SIZE",
-                "4"
-            )
-        ),
-
-        "data_width": int(
-            os.environ.get(
-                "DATA_WIDTH",
-                "8"
-            )
-        ),
-
-        "utilization": float(
-            os.environ.get(
-                "UTIL",
-                "50"
-            )
-        ),
-
-        "clock_period": float(
-            os.environ.get(
-                "CLK_PERIOD",
-                "5.0"
-            )
-        ),
+        "array_rows": int(os.environ.get("ARRAY_ROWS", "4")),
+        "array_cols": int(os.environ.get("ARRAY_COLS", "4")),
+        "array_size": int(os.environ.get("ARRAY_SIZE", "4")),
+        "data_width": int(os.environ.get("DATA_WIDTH", "8")),
+        "utilization": float(os.environ.get("UTIL", "50")),
+        "clock_period": float(os.environ.get("CLK_PERIOD", "5.0")),
     }
-
 
 # ================================================================
 # DEF PARSER

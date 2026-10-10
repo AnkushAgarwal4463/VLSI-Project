@@ -2,14 +2,21 @@
 # Systolic Array OpenROAD Physical Design Flow
 # ==============================================================================
 
+
 # ----------------------------------------------------------------------
 # 1. Read environment
 # ----------------------------------------------------------------------
 
-if {[info exists ::env(ARRAY_SIZE)]} {
-    set ARRAY_SIZE $::env(ARRAY_SIZE)
+if {[info exists ::env(ARRAY_ROWS)]} {
+    set ARRAY_ROWS $::env(ARRAY_ROWS)
 } else {
-    set ARRAY_SIZE 4
+    set ARRAY_ROWS 4
+}
+
+if {[info exists ::env(ARRAY_COLS)]} {
+    set ARRAY_COLS $::env(ARRAY_COLS)
+} else {
+    set ARRAY_COLS 4
 }
 
 if {[info exists ::env(DATA_WIDTH)]} {
@@ -36,27 +43,33 @@ if {[info exists ::env(RUN_TAG)]} {
     set RUN_TAG "run_test"
 }
 
+
 # ----------------------------------------------------------------------
 # 2. Validate
 # ----------------------------------------------------------------------
 
-if {$ARRAY_SIZE <= 0} {
-    puts "\[ERROR\] Invalid ARRAY_SIZE"
+if {![string is integer -strict $ARRAY_ROWS] || $ARRAY_ROWS <= 0} {
+    puts "\[ERROR\] Invalid ARRAY_ROWS: $ARRAY_ROWS"
     exit 1
 }
 
-if {$DATA_WIDTH <= 0} {
-    puts "\[ERROR\] Invalid DATA_WIDTH"
+if {![string is integer -strict $ARRAY_COLS] || $ARRAY_COLS <= 0} {
+    puts "\[ERROR\] Invalid ARRAY_COLS: $ARRAY_COLS"
     exit 1
 }
 
-if {$UTIL <= 0 || $UTIL >= 100} {
+if {![string is integer -strict $DATA_WIDTH] || $DATA_WIDTH <= 0} {
+    puts "\[ERROR\] Invalid DATA_WIDTH: $DATA_WIDTH"
+    exit 1
+}
+
+if {![string is integer -strict $UTIL] || $UTIL <= 0 || $UTIL >= 100} {
     puts "\[ERROR\] Invalid utilization: $UTIL"
     exit 1
 }
 
-if {$CLK_PERIOD <= 0} {
-    puts "\[ERROR\] Invalid clock period"
+if {![string is double -strict $CLK_PERIOD] || $CLK_PERIOD <= 0} {
+    puts "\[ERROR\] Invalid clock period: $CLK_PERIOD"
     exit 1
 }
 
@@ -71,8 +84,10 @@ file mkdir $run_dir
 puts "=============================================="
 puts "SYSTOLIC ARRAY OPENROAD RUN"
 puts "=============================================="
-puts "ARRAY_SIZE : $ARRAY_SIZE"
+puts "ARRAY_ROWS : $ARRAY_ROWS"
+puts "ARRAY_COLS : $ARRAY_COLS"
 puts "DATA_WIDTH : $DATA_WIDTH"
+puts "ARRAY_CELLS: [expr {$ARRAY_ROWS * $ARRAY_COLS}]"
 puts "UTIL       : $UTIL %"
 puts "CLK_PERIOD : $CLK_PERIOD ns"
 puts "RUN_TAG    : $RUN_TAG"

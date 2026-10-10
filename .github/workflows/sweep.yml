@@ -697,6 +697,23 @@ jobs:
             "systolic_project/runs/${RUN_TAG}/synth_log.txt"
           test -f \
             "systolic_project/synth/systolic_netlist.v"
+
+      - name: Check runner memory
+        run: |
+          echo "===== MEMORY ====="
+          free -h
+      
+          echo "===== CPU CORES ====="
+          nproc
+      
+          echo "===== SWAP ====="
+          grep -E 'MemTotal|MemAvailable|SwapTotal|SwapFree' /proc/meminfo
+      
+          echo "===== CGROUP MEMORY LIMIT ====="
+          cat /sys/fs/cgroup/memory.max 2>/dev/null || true
+      
+          echo "===== CGROUP MEMORY USAGE ====="
+          cat /sys/fs/cgroup/memory.current 2>/dev/null || true
 # ================================================================
 # OPENROAD
 # ================================================================
@@ -1119,8 +1136,8 @@ jobs:
           print(f"Columns: {len(COLUMNS)}")
           print()
 
-          if len(rows) == 1:
-              print("[OK] Test run: 1 row generated.")
+          if len(rows) == 6:
+              print("[OK] Test run: 6 rows generated.")
 
           elif len(rows) == 72:
               print("[OK] Full sweep: 72 rows generated.")

@@ -18,517 +18,94 @@ permissions:
 
 jobs:
 
-  # ================================================================
-  # JOB 1: Generate Matrix
-  # ================================================================
+ 
+  # ============================================================
+  # JOB 1: GENERATE MATRIX
+  # ============================================================
   generate-matrix:
-
     runs-on: ubuntu-latest
 
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      expected_runs: ${{ steps.set-matrix.outputs.expected_runs }}
 
     steps:
-
-      - name: Generate experiment matrix
+      - name: Generate configuration matrix
         id: set-matrix
         shell: bash
-        env:
-          TEST_MODE: ${{ inputs.test_mode }}
         run: |
-          set -euo pipefail
-          TEST_MATRIX='[
-              {
-                "array_size": 4,
-                "data_width": 8,
-                "utilization": 20,
-                "clk_period": 10.0
-              },
-              {
-                "array_size": 4,
-                "data_width": 16,
-                "utilization": 70,
-                "clk_period": 15.0
-              },
-              {
-                "array_size": 8,
-                "data_width": 8,
-                "utilization": 20,
-                "clk_period": 20.0
-              },
-              {
-                "array_size": 8,
-                "data_width": 16,
-                "utilization": 70,
-                "clk_period": 25.0
-              },
-              {
-                "array_size": 16,
-                "data_width": 8,
-                "utilization": 20,
-                "clk_period": 30.0
-              },
-              {
-                "array_size": 16,
-                "data_width": 16,
-                "utilization": 70,
-                "clk_period": 35.0
-              }
-            ]'
-          FULL_MATRIX='[
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 20,
-              "clk_period": 10.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 20,
-              "clk_period": 15.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 30,
-              "clk_period": 10.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 30,
-              "clk_period": 15.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 40,
-              "clk_period": 10.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 40,
-              "clk_period": 15.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 50,
-              "clk_period": 10.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 50,
-              "clk_period": 15.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 60,
-              "clk_period": 10.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 60,
-              "clk_period": 15.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 70,
-              "clk_period": 10.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 8,
-              "utilization": 70,
-              "clk_period": 15.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 16,
-              "utilization": 20,
-              "clk_period": 10.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 16,
-              "utilization": 20,
-              "clk_period": 15.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 16,
-              "utilization": 30,
-              "clk_period": 10.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 16,
-              "utilization": 30,
-              "clk_period": 15.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 16,
-              "utilization": 40,
-              "clk_period": 10.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 16,
-              "utilization": 40,
-              "clk_period": 15.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 16,
-              "utilization": 50,
-              "clk_period": 10.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 16,
-              "utilization": 50,
-              "clk_period": 15.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 16,
-              "utilization": 60,
-              "clk_period": 10.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 16,
-              "utilization": 60,
-              "clk_period": 15.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 16,
-              "utilization": 70,
-              "clk_period": 10.0
-            },
-            {
-              "array_size": 4,
-              "data_width": 16,
-              "utilization": 70,
-              "clk_period": 15.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 8,
-              "utilization": 20,
-              "clk_period": 20.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 8,
-              "utilization": 20,
-              "clk_period": 25.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 8,
-              "utilization": 30,
-              "clk_period": 20.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 8,
-              "utilization": 30,
-              "clk_period": 25.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 8,
-              "utilization": 40,
-              "clk_period": 20.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 8,
-              "utilization": 40,
-              "clk_period": 25.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 8,
-              "utilization": 50,
-              "clk_period": 20.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 8,
-              "utilization": 50,
-              "clk_period": 25.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 8,
-              "utilization": 60,
-              "clk_period": 20.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 8,
-              "utilization": 60,
-              "clk_period": 25.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 8,
-              "utilization": 70,
-              "clk_period": 20.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 8,
-              "utilization": 70,
-              "clk_period": 25.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 16,
-              "utilization": 20,
-              "clk_period": 20.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 16,
-              "utilization": 20,
-              "clk_period": 25.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 16,
-              "utilization": 30,
-              "clk_period": 20.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 16,
-              "utilization": 30,
-              "clk_period": 25.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 16,
-              "utilization": 40,
-              "clk_period": 20.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 16,
-              "utilization": 40,
-              "clk_period": 25.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 16,
-              "utilization": 50,
-              "clk_period": 20.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 16,
-              "utilization": 50,
-              "clk_period": 25.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 16,
-              "utilization": 60,
-              "clk_period": 20.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 16,
-              "utilization": 60,
-              "clk_period": 25.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 16,
-              "utilization": 70,
-              "clk_period": 20.0
-            },
-            {
-              "array_size": 8,
-              "data_width": 16,
-              "utilization": 70,
-              "clk_period": 25.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 8,
-              "utilization": 20,
-              "clk_period": 30.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 8,
-              "utilization": 20,
-              "clk_period": 35.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 8,
-              "utilization": 30,
-              "clk_period": 30.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 8,
-              "utilization": 30,
-              "clk_period": 35.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 8,
-              "utilization": 40,
-              "clk_period": 30.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 8,
-              "utilization": 40,
-              "clk_period": 35.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 8,
-              "utilization": 50,
-              "clk_period": 30.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 8,
-              "utilization": 50,
-              "clk_period": 35.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 8,
-              "utilization": 60,
-              "clk_period": 30.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 8,
-              "utilization": 60,
-              "clk_period": 35.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 8,
-              "utilization": 70,
-              "clk_period": 30.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 8,
-              "utilization": 70,
-              "clk_period": 35.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 16,
-              "utilization": 20,
-              "clk_period": 30.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 16,
-              "utilization": 20,
-              "clk_period": 35.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 16,
-              "utilization": 30,
-              "clk_period": 30.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 16,
-              "utilization": 30,
-              "clk_period": 35.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 16,
-              "utilization": 40,
-              "clk_period": 30.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 16,
-              "utilization": 40,
-              "clk_period": 35.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 16,
-              "utilization": 50,
-              "clk_period": 30.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 16,
-              "utilization": 50,
-              "clk_period": 35.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 16,
-              "utilization": 60,
-              "clk_period": 30.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 16,
-              "utilization": 60,
-              "clk_period": 35.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 16,
-              "utilization": 70,
-              "clk_period": 30.0
-            },
-            {
-              "array_size": 16,
-              "data_width": 16,
-              "utilization": 70,
-              "clk_period": 35.0
-            }
-          ]'
-          if [ "$TEST_MODE" = "test_1_run" ]; then
-            echo "Selected: TEST RUN"
-            JSON_OUT=$(printf '%s' "$TEST_MATRIX" | jq -c .)
-          else
-            echo "Selected: FULL 72-RUN SWEEP"
-            JSON_OUT=$(printf '%s' "$FULL_MATRIX" | jq -c .)
-          fi
-          COUNT=$(printf '%s' "$JSON_OUT" | jq length)
-          echo "Number of configurations: $COUNT"
-          
-          if [ "$TEST_MODE" = "test_1_run" ] && [ "$COUNT" -ne 6 ]; then
-          echo "ERROR: Test matrix does not contain 6 configurations."
-          exit 1
-          fi
-        
-          if [ "$TEST_MODE" = "full_72_run" ] && [ "$COUNT" -ne 72 ]; then
-          echo "ERROR: Full sweep does not contain 72 configurations."
-          exit 1
-          fi
-          echo "matrix=$JSON_OUT" >> "$GITHUB_OUTPUT"
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import itertools
+          import sys
+
+          # Test configurations: 6 runs
+          test_configs = [
+              {"ARRAY_ROWS": 2, "ARRAY_COLS": 2, "DATA_WIDTH": 4, "UTIL": 20, "CLK_PERIOD": 10},
+              {"ARRAY_ROWS": 2, "ARRAY_COLS": 8, "DATA_WIDTH": 8, "UTIL": 70, "CLK_PERIOD": 15},
+              {"ARRAY_ROWS": 4, "ARRAY_COLS": 2, "DATA_WIDTH": 4, "UTIL": 20, "CLK_PERIOD": 20},
+              {"ARRAY_ROWS": 4, "ARRAY_COLS": 8, "DATA_WIDTH": 8, "UTIL": 70, "CLK_PERIOD": 25},
+              {"ARRAY_ROWS": 8, "ARRAY_COLS": 2, "DATA_WIDTH": 4, "UTIL": 20, "CLK_PERIOD": 30},
+              {"ARRAY_ROWS": 8, "ARRAY_COLS": 8, "DATA_WIDTH": 8, "UTIL": 70, "CLK_PERIOD": 35},
+          ]
+
+          # Full configurations:
+          # 9 array shapes x 2 widths x 6 utilization levels x 2 clocks = 216
+          shapes = [
+              (2, 2), (2, 4), (2, 8),
+              (4, 2), (4, 4), (4, 8),
+              (8, 2), (8, 4), (8, 8),
+          ]
+
+          data_widths = [4, 8]
+          utilizations = [20, 30, 40, 50, 60, 70]
+
+          clock_periods = {
+              2: [10, 15],
+              4: [20, 25],
+              8: [30, 35],
+          }
+
+          full_configs = []
+
+          for rows, cols in shapes:
+              for width, util, clk in itertools.product(
+                  data_widths,
+                  utilizations,
+                  clock_periods[rows]
+              ):
+                  full_configs.append({
+                      "ARRAY_ROWS": rows,
+                      "ARRAY_COLS": cols,
+                      "DATA_WIDTH": width,
+                      "UTIL": util,
+                      "CLK_PERIOD": clk,
+                  })
+
+          # Select the matrix using the existing workflow input.
+          # Keep the input name full_72_run for compatibility.
+          event = json.loads(__import__("os").environ.get("GITHUB_EVENT_PATH", "{}") and
+                             open(__import__("os").environ["GITHUB_EVENT_PATH"]).read())
+          selected_mode = event.get("inputs", {}).get("test_mode", "test_1_run")
+
+          if selected_mode == "full_72_run":
+              configs = full_configs
+              mode = "full"
+          else:
+              configs = test_configs
+              mode = "test"
+
+          matrix = {"include": configs}
+
+          print(f"matrix={json.dumps(matrix, separators=(',', ':'))}")
+          print(f"expected_runs={len(configs)}")
+
+          print(
+              f"Mode: {mode}; generated {len(configs)} configurations.",
+              file=sys.stderr
+          )
+          PY
+
   # ================================================================
   # JOB 2: Run Sweep
   # ================================================================
@@ -542,7 +119,7 @@ jobs:
 
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 1
 
       matrix:
         include: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
@@ -612,11 +189,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "ARRAY_SIZE=${{ matrix.array_size }}" >> "$GITHUB_ENV"
-          echo "DATA_WIDTH=${{ matrix.data_width }}" >> "$GITHUB_ENV"
-          echo "UTIL=${{ matrix.utilization }}" >> "$GITHUB_ENV"
-          echo "CLK_PERIOD=${{ matrix.clk_period }}" >> "$GITHUB_ENV"
-          echo "RUN_TAG=sys${{ matrix.array_size }}_w${{ matrix.data_width }}_u${{ matrix.utilization }}_clk${{ matrix.clk_period }}" >> "$GITHUB_ENV"
+          echo "ARRAY_ROWS=${{ matrix.ARRAY_ROWS }}" >> "$GITHUB_ENV"
+          echo "ARRAY_COLS=${{ matrix.ARRAY_COLS }}" >> "$GITHUB_ENV"
+          echo "DATA_WIDTH=${{ matrix.DATA_WIDTH }}" >> "$GITHUB_ENV"
+          echo "UTIL=${{ matrix.UTIL }}" >> "$GITHUB_ENV"
+          echo "CLK_PERIOD=${{ matrix.CLK_PERIOD }}" >> "$GITHUB_ENV"
+          echo "RUN_TAG=sys${{ matrix.ARRAY_ROWS }}x${{ matrix.ARRAY_COLS }}_w${{ matrix.DATA_WIDTH }}_u${{ matrix.UTIL }}_clk${{ matrix.CLK_PERIOD }}" >> "$GITHUB_ENV"
       # --------------------------------------------------------------
       # Find Liberty
       # --------------------------------------------------------------
@@ -659,7 +237,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "======================================"
-          echo "ARRAY_SIZE = $ARRAY_SIZE"
+          echo "ARRAY_ROWS = $ARRAY_ROWS"
+          echo "ARRAY_COLS = $ARRAY_COLS"
           echo "DATA_WIDTH = $DATA_WIDTH"
           echo "UTIL       = $UTIL"
           echo "CLK_PERIOD = $CLK_PERIOD"
@@ -684,12 +263,13 @@ jobs:
           /usr/bin/mkdir -p \
             "systolic_project/runs/${RUN_TAG}"
           sed \
-            -e "s|__ARRAY_SIZE__|${ARRAY_SIZE}|g" \
-            -e "s|__DATA_WIDTH__|${DATA_WIDTH}|g" \
-            -e "s|__LIB_FILE__|${LIB_FILE}|g" \
-            -e "s|__RUN_TAG__|${RUN_TAG}|g" \
-            scripts/synth.ys \
-            > /tmp/synth.ys
+          -e "s|__ARRAY_ROWS__|${ARRAY_ROWS}|g" \
+          -e "s|__ARRAY_COLS__|${ARRAY_COLS}|g" \
+          -e "s|__DATA_WIDTH__|${DATA_WIDTH}|g" \
+          -e "s|__LIB_FILE__|${LIB_FILE}|g" \
+          -e "s|__RUN_TAG__|${RUN_TAG}|g" \
+          scripts/synth.ys \
+          > /tmp/synth.ys
           echo "Running Yosys..."
           yosys \
             -s /tmp/synth.ys \
@@ -981,7 +561,8 @@ jobs:
           OUTPUT = Path("summary_output/systolic_array_sweep_dataset.csv")
 
           COLUMNS = [
-              "array_size",
+              "array_rows",
+              "array_cols",
               "data_width",
               "utilization",
               "clock_period",
@@ -1059,31 +640,24 @@ jobs:
                   row[column] = data.get(column)
 
               # ------------------------------------------------------
-              # Recover experiment parameters from run_tag
+              # Recover experiment parameters from rectangular run_tag
+              # Example: sys2x4_w4_u20_clk10
               # ------------------------------------------------------
 
               run_tag = data.get("run_tag")
 
               if run_tag:
-
                   match = re.search(
-                      r"sys(\d+)_w(\d+)_u(\d+)_clk([0-9.]+)",
+                      r"sys(\d+)x(\d+)_w(\d+)_u(\d+)_clk([0-9.]+)",
                       str(run_tag)
                   )
 
                   if match:
-
-                      if row["array_size"] is None:
-                          row["array_size"] = int(match.group(1))
-
-                      if row["data_width"] is None:
-                          row["data_width"] = int(match.group(2))
-
-                      if row["utilization"] is None:
-                          row["utilization"] = int(match.group(3))
-
-                      if row["clock_period"] is None:
-                          row["clock_period"] = float(match.group(4))
+                      row["array_rows"] = int(match.group(1))
+                      row["array_cols"] = int(match.group(2))
+                      row["data_width"] = int(match.group(3))
+                      row["utilization"] = int(match.group(4))
+                      row["clock_period"] = float(match.group(5))
 
               # ------------------------------------------------------
               # Alternative names
@@ -1139,8 +713,8 @@ jobs:
           if len(rows) == 6:
               print("[OK] Test run: 6 rows generated.")
 
-          elif len(rows) == 72:
-              print("[OK] Full sweep: 72 rows generated.")
+          elif len(rows) == 216:
+              print("[OK] Full sweep: 216 rows generated.")
 
           else:
               print(
@@ -1194,17 +768,16 @@ jobs:
 
 
       # --------------------------------------------------------------
-      # Verify 19-column schema
+      # Verify 20-column schema
       # --------------------------------------------------------------
-      - name: Verify 19-column schema
+      - name: Verify 20-column schema
         shell: bash
         run: |
           set -euo pipefail
 
           CSV="summary_output/systolic_array_sweep_dataset.csv"
 
-          EXPECTED="array_size,data_width,utilization,clock_period,max_density,mean_density,std_density,pin_density,avg_fanout,max_fanout,x_spread,y_spread,num_registers,logic_depth,crit_path_wirelength,estimated_wirelength,congestion,WNS,TNS"
-
+          EXPECTED="array_rows,array_cols,data_width,utilization,clock_period,max_density,mean_density,std_density,pin_density,avg_fanout,max_fanout,x_spread,y_spread,num_registers,logic_depth,crit_path_wirelength,estimated_wirelength,congestion,WNS,TNS"
           ACTUAL=$(head -n 1 "$CSV" | tr -d '\r')
 
           echo "Actual:"
@@ -1216,12 +789,12 @@ jobs:
 
           if [ "$ACTUAL" != "$EXPECTED" ]; then
               echo
-              echo "[ERROR] CSV does not contain the expected 19 columns."
+              echo "[ERROR] CSV does not contain the expected 20 columns."
               exit 1
           fi
 
           echo
-          echo "[OK] 19-column schema verified successfully."
+          echo "[OK] 20-column schema verified successfully."
 
 
       # --------------------------------------------------------------
@@ -1257,7 +830,7 @@ jobs:
             echo "- Run entries: $COUNT" \
               >> "$GITHUB_STEP_SUMMARY"
 
-            echo "- Expected full sweep: 72" \
+            echo "- Expected full sweep: 216" \
               >> "$GITHUB_STEP_SUMMARY"
 
           else
